@@ -56,9 +56,9 @@ def score_signals(
             bull_score += 1
         if bear_score:
             bear_score += 1
-        reasons.append(f"ranging market (ADX={regime.adx_value:.1f}) favors reversal")
+        reasons.append(f"ranging market ({regime.describe()}) favors reversal")
     else:
-        reasons.append(f"trending market (ADX={regime.adx_value:.1f}) — reversal signals are lower-confidence")
+        reasons.append(f"trending market ({regime.describe()}) — reversal signals are lower-confidence")
 
     if bull_score > bear_score and bull_score >= min_score_to_alert:
         return EarlyWarning(symbol, "bullish", bull_score, regime, reasons)

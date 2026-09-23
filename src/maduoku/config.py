@@ -46,6 +46,13 @@ class MacroFilterConfig:
 
 
 @dataclass
+class RegimeConfig:
+    method: str = "adx"  # "adx" | "hmm"
+    hmm_states: int = 3
+    hmm_ranging_threshold: float = 0.0005
+
+
+@dataclass
 class ScoringConfig:
     min_score_to_alert: int = 2
 
@@ -74,6 +81,7 @@ class Config:
     divergence: DivergenceConfig = field(default_factory=DivergenceConfig)
     liquidity_sweep: LiquiditySweepConfig = field(default_factory=LiquiditySweepConfig)
     macro_filters: MacroFilterConfig = field(default_factory=MacroFilterConfig)
+    regime: RegimeConfig = field(default_factory=RegimeConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
 
@@ -122,6 +130,13 @@ class Config:
             enabled=mf.get("enabled", True),
             lookback=mf.get("lookback", 5),
             filters=filters,
+        )
+
+        rg = raw.get("regime", {})
+        cfg.regime = RegimeConfig(
+            method=rg.get("method", "adx"),
+            hmm_states=rg.get("hmm_states", 3),
+            hmm_ranging_threshold=rg.get("hmm_ranging_threshold", 0.0005),
         )
 
         sc = raw.get("scoring", {})

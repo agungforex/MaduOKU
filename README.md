@@ -21,8 +21,14 @@ dan **Bitcoin**, berbasis confluence dari beberapa indikator teknikal.
    bias bullish/bearish untuk simbol yang berkorelasi (mis. DXY naik → bearish
    untuk gold, VIX naik → risk-off yang mendukung gold & menekan bitcoin).
    Selalu diambil via `yfinance` karena tidak tersedia di Binance Futures.
-6. **Klasifikasi regime** pasar (trending vs ranging) via ADX — reversal di pasar
-   ranging dianggap lebih andal.
+6. **Klasifikasi regime** pasar (trending vs ranging), dipilih via `regime.method`:
+   - `adx` (default) — ADX di atas threshold tetap = trending.
+   - `hmm` — fit Gaussian HMM (`hmmlearn`) di atas log-return harga, cocokkan
+     regime saat ini ke salah satu hidden state (trending-up/down/ranging)
+     berdasarkan mean return state tersebut. Lebih adaptif per simbol
+     dibanding threshold ADX tetap, tapi butuh histori cukup panjang
+     (`hmm_states * 20` bar) — otomatis fallback ke ADX kalau gagal fit.
+   Reversal di pasar ranging (regime manapun) dianggap lebih andal.
 7. **Scoring confluence**: gabungkan semua bukti (divergence + sweep + makro)
    jadi satu skor. Alert hanya dikirim jika skor ≥ `min_score_to_alert`.
 8. **Alert** opsional ke Telegram.
@@ -76,9 +82,10 @@ Kombinasi dengan sinyal lebih sedikit dari `--min-signals` dibuang (biar tidak
 tertipu win rate tinggi dari cuma 2 sinyal kebetulan). Hasil diurutkan dari
 rata-rata return tertinggi.
 
-> **Catatan**: filter korelasi makro belum masuk ke dalam backtest/sweep —
-> keduanya hanya mensimulasikan divergence + liquidity sweep + regime ADX.
-> Live scan (`main`) sudah menyertakan filter makro sepenuhnya.
+> **Catatan**: filter korelasi makro dan regime HMM belum masuk ke dalam
+> backtest/sweep — keduanya hanya mensimulasikan divergence + liquidity sweep
+> + regime ADX (refit HMM di setiap bar walk-forward terlalu berat untuk
+> ukuran sweep saat ini). Live scan (`main`) sudah menyertakan keduanya.
 
 ## Testing
 
@@ -101,6 +108,7 @@ src/maduoku/
     liquidity_sweep.py    # deteksi stop-hunt / liquidity sweep
     macro.py              # bias bullish/bearish dari tren DXY/VIX
     regime.py            # trending vs ranging (ADX)
+    hmm_regime.py          # trending vs ranging (Gaussian HMM)
     scoring.py           # confluence scoring -> EarlyWarning
   alerts/telegram.py     # kirim alert
   backtest/
@@ -114,7 +122,7 @@ tests/                   # unit test untuk divergence, scoring, data, backtest, 
 
 ## Roadmap pengembangan lanjutan
 
-- Sertakan filter korelasi makro ke dalam backtest/sweep (perlu menyelaraskan
-  histori DXY/VIX per-timestamp dengan simbol utama secara walk-forward).
+- Sertakan filter korelasi makro & regime HMM ke dalam backtest/sweep (perlu
+  menyelaraskan histori DXY/VIX per-timestamp, dan strategi refit HMM yang
+  murah untuk simulasi walk-forward).
 - Funding rate / open interest Binance sebagai konfirmasi tambahan untuk bitcoin.
-- Market regime detection yang lebih canggih (HMM) sebagai pengganti/pelengkap ADX.

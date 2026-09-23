@@ -45,6 +45,13 @@ macro_filters:
       - ticker: "^VIX"        # risk-off tends to hurt risk assets like bitcoin
         correlation: -1
 
+regime:
+  method: "adx"              # "adx" | "hmm"
+  hmm_states: 3               # number of hidden states (e.g. up/down/ranging)
+  hmm_ranging_threshold: 0.0005  # |state mean log-return| below this = ranging
+  # HMM needs at least hmm_states*20 bars of history to fit; falls back to ADX
+  # automatically if fitting fails (e.g. not enough data).
+
 scoring:
   min_score_to_alert: 2     # confluence points needed before alerting
 

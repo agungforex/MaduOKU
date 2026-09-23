@@ -11,6 +11,7 @@ from .indicators.adx import adx
 from .indicators.macd import macd
 from .indicators.rsi import rsi
 from .signals.divergence import detect_divergence
+from .signals.hmm_regime import classify_regime_hmm
 from .signals.liquidity_sweep import detect_liquidity_sweep
 from .signals.macro import macro_bias_signal
 from .signals.regime import classify_regime
@@ -74,7 +75,17 @@ def analyze_symbol(name: str, cfg: Config) -> EarlyWarning:
 
     signals += fetch_macro_signals(name, cfg)
 
-    regime = classify_regime(adx_series, cfg.indicators.adx_trend_threshold)
+    if cfg.regime.method == "hmm":
+        try:
+            regime = classify_regime_hmm(
+                df["Close"], cfg.regime.hmm_states, cfg.regime.hmm_ranging_threshold
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"  (HMM regime detection failed, falling back to ADX: {exc})", file=sys.stderr)
+            regime = classify_regime(adx_series, cfg.indicators.adx_trend_threshold)
+    else:
+        regime = classify_regime(adx_series, cfg.indicators.adx_trend_threshold)
+
     return score_signals(name, signals, regime, cfg.scoring.min_score_to_alert)
 
 
