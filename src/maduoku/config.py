@@ -27,6 +27,12 @@ class DivergenceConfig:
 
 
 @dataclass
+class LiquiditySweepConfig:
+    enabled: bool = True
+    lookback: int = 20
+
+
+@dataclass
 class ScoringConfig:
     min_score_to_alert: int = 2
 
@@ -53,6 +59,7 @@ class Config:
     binance_limit: int = 500
     indicators: IndicatorConfig = field(default_factory=IndicatorConfig)
     divergence: DivergenceConfig = field(default_factory=DivergenceConfig)
+    liquidity_sweep: LiquiditySweepConfig = field(default_factory=LiquiditySweepConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
 
@@ -83,6 +90,12 @@ class Config:
             pivot_left=div.get("pivot_left", 3),
             pivot_right=div.get("pivot_right", 3),
             max_pivot_lookback=div.get("max_pivot_lookback", 5),
+        )
+
+        ls = raw.get("liquidity_sweep", {})
+        cfg.liquidity_sweep = LiquiditySweepConfig(
+            enabled=ls.get("enabled", True),
+            lookback=ls.get("lookback", 20),
         )
 
         sc = raw.get("scoring", {})

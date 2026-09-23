@@ -25,6 +25,10 @@ divergence:
   pivot_right: 3
   max_pivot_lookback: 5     # how many recent pivots to compare
 
+liquidity_sweep:
+  enabled: true
+  lookback: 20              # bars to look back for the prior high/low to sweep
+
 scoring:
   min_score_to_alert: 2     # confluence points needed before alerting
 

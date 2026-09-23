@@ -11,6 +11,7 @@ from .indicators.adx import adx
 from .indicators.macd import macd
 from .indicators.rsi import rsi
 from .signals.divergence import detect_divergence
+from .signals.liquidity_sweep import detect_liquidity_sweep
 from .signals.regime import classify_regime
 from .signals.scoring import EarlyWarning, score_signals
 
@@ -41,6 +42,9 @@ def analyze_symbol(name: str, cfg: Config) -> EarlyWarning:
     ) + detect_divergence(
         df, macd_hist, "MACD", div.pivot_left, div.pivot_right, div.max_pivot_lookback
     )
+
+    if cfg.liquidity_sweep.enabled:
+        signals += detect_liquidity_sweep(df, cfg.liquidity_sweep.lookback)
 
     regime = classify_regime(adx_series, cfg.indicators.adx_trend_threshold)
     return score_signals(name, signals, regime, cfg.scoring.min_score_to_alert)

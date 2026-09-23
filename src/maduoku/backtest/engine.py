@@ -9,6 +9,7 @@ from ..indicators.adx import adx
 from ..indicators.macd import macd
 from ..indicators.rsi import rsi
 from ..signals.divergence import detect_divergence
+from ..signals.liquidity_sweep import detect_liquidity_sweep
 from ..signals.regime import classify_regime
 from ..signals.scoring import score_signals
 
@@ -52,6 +53,9 @@ def run_backtest(df: pd.DataFrame, cfg: Config, forward_bars: int = 5, step: int
         ) + detect_divergence(
             sub_df, macd_hist.iloc[: i + 1], "MACD", div.pivot_left, div.pivot_right, div.max_pivot_lookback
         )
+
+        if cfg.liquidity_sweep.enabled:
+            signals += detect_liquidity_sweep(sub_df, cfg.liquidity_sweep.lookback)
 
         regime = classify_regime(adx_series.iloc[: i + 1], cfg.indicators.adx_trend_threshold)
         warning = score_signals("backtest", signals, regime, cfg.scoring.min_score_to_alert)

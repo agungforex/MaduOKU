@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Union
 
 from .divergence import DivergenceSignal
+from .liquidity_sweep import SweepSignal
 from .regime import RegimeState
 
-BULLISH_REVERSAL = {"regular_bullish"}
-BEARISH_REVERSAL = {"regular_bearish"}
+Signal = Union[DivergenceSignal, SweepSignal]
+
+BULLISH_REVERSAL = {"regular_bullish", "bullish_sweep"}
+BEARISH_REVERSAL = {"regular_bearish", "bearish_sweep"}
 
 
 @dataclass
@@ -24,23 +28,24 @@ class EarlyWarning:
 
 def score_signals(
     symbol: str,
-    divergence_signals: list[DivergenceSignal],
+    signals: list[Signal],
     regime: RegimeState,
     min_score_to_alert: int = 2,
 ) -> EarlyWarning:
-    """Combine divergence evidence across indicators into a single confluence
-    score. Only *regular* divergence counts as a reversal warning; hidden
-    divergence (continuation) is reported but does not add to the score.
+    """Combine divergence and liquidity-sweep evidence into a single
+    confluence score. Only *regular* divergence and sweeps count as a
+    reversal warning; hidden divergence (continuation) is reported but does
+    not add to the score.
 
     Ranging markets (low ADX) get a bonus point, since reversals are more
     reliable/expected outside strong trends. Reversal warnings *against* a
     strong trend are still surfaced, but flagged as lower-confidence via the
     reasons list rather than suppressed outright.
     """
-    bull_hits = [s for s in divergence_signals if s.kind in BULLISH_REVERSAL]
-    bear_hits = [s for s in divergence_signals if s.kind in BEARISH_REVERSAL]
+    bull_hits = [s for s in signals if s.kind in BULLISH_REVERSAL]
+    bear_hits = [s for s in signals if s.kind in BEARISH_REVERSAL]
 
-    reasons = [f"{s.indicator_name}: {s.detail}" for s in divergence_signals]
+    reasons = [f"{s.indicator_name}: {s.detail}" for s in signals]
 
     bull_score = len(bull_hits)
     bear_score = len(bear_hits)

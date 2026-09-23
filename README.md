@@ -14,11 +14,14 @@ dan **Bitcoin**, berbasis confluence dari beberapa indikator teknikal.
 3. **Deteksi divergence** antara harga dan RSI/MACD di swing high/low terakhir:
    - *Regular bullish/bearish* → sinyal pembalikan (early warning).
    - *Hidden bullish/bearish* → sinyal lanjutan tren (dilaporkan, tidak menambah skor).
-4. **Klasifikasi regime** pasar (trending vs ranging) via ADX — reversal di pasar
+4. **Deteksi liquidity sweep** (Smart Money Concepts): harga menembus swing high/low
+   `lookback` bar terakhir lalu ditutup kembali di dalam range — tanda stop order
+   "disapu" sebelum reversal.
+5. **Klasifikasi regime** pasar (trending vs ranging) via ADX — reversal di pasar
    ranging dianggap lebih andal.
-5. **Scoring confluence**: gabungkan semua bukti jadi satu skor. Alert hanya
-   dikirim jika skor ≥ `min_score_to_alert`.
-6. **Alert** opsional ke Telegram.
+6. **Scoring confluence**: gabungkan semua bukti (divergence + sweep) jadi satu
+   skor. Alert hanya dikirim jika skor ≥ `min_score_to_alert`.
+7. **Alert** opsional ke Telegram.
 
 ## Instalasi
 
@@ -72,6 +75,7 @@ src/maduoku/
   signals/
     pivots.py           # deteksi swing high/low (fractal)
     divergence.py        # regular & hidden divergence
+    liquidity_sweep.py    # deteksi stop-hunt / liquidity sweep
     regime.py            # trending vs ranging (ADX)
     scoring.py           # confluence scoring -> EarlyWarning
   alerts/telegram.py     # kirim alert
@@ -83,8 +87,6 @@ tests/                   # unit test untuk divergence, scoring, data, backtest
 
 ## Roadmap pengembangan lanjutan
 
-- Liquidity sweep / stop-hunt detection (ala Smart Money Concepts) sebagai
-  konfirmasi tambahan sebelum reversal.
 - Filter korelasi makro (DXY, VIX) untuk gold; funding rate/open interest
   untuk bitcoin.
 - Market regime detection yang lebih canggih (HMM) sebagai pengganti/pelengkap ADX.
