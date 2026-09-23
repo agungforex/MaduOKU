@@ -91,6 +91,23 @@ sides are bridged through a small shared file:
    machine). The indicator polls those files every `InpRefreshSeconds`
    and repaints the dashboard.
 
+   **On Windows, automate this with Task Scheduler** using the files
+   in `windows/`:
+   - Edit the three paths at the top of `windows/run_mt4_export.bat`
+     (project folder, Python executable, MT4 Common\Files folder).
+   - Register it to run every few minutes:
+     ```powershell
+     cd C:\MaduOKU\windows
+     powershell -ExecutionPolicy Bypass -File .\register_task.ps1
+     ```
+   - This creates a task named `MaduOKU_MT4_Export` (visible in Task
+     Scheduler) that reruns the exporter on the interval set in
+     `register_task.ps1` (`$IntervalMinutes`, default 5). Logs go to
+     `logs\mt4_export.log` inside the project folder — check there
+     first if the dashboard shows `[STALE]`.
+   - If you add more symbols later, add another
+     `export_mt4_signal.py --symbol ...` line to `run_mt4_export.bat`.
+
 3. The dashboard flags a row **[STALE]** if its file hasn't been
    refreshed recently (more than 3x that timeframe's bar length) —
    a sign the exporter/cronjob has stopped running, not that the model
