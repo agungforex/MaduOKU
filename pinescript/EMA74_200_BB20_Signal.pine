@@ -1,0 +1,38 @@
+//@version=6
+indicator("EMA 74/200 + BB 20 Signal", overlay=true)
+
+// ---- Inputs ----
+emaFastLen = input.int(74, "EMA Fast")
+emaSlowLen = input.int(200, "EMA Slow")
+bbLen = input.int(20, "BB Length")
+bbMult = input.float(2.0, "BB StdDev Multiplier (k)", step=0.1)
+
+// ---- Core series ----
+// EMA: EMA_t = alpha*Close_t + (1-alpha)*EMA_t-1, alpha = 2/(len+1)
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+
+// BB20: Basis = SMA20, Upper/Lower = Basis +- k*StdDev20
+[bbBasis, bbUpper, bbLower] = ta.bb(close, bbLen, bbMult)
+
+// Trend filter: slope EMA74 (arah kemiringan)
+trendUp = emaFast > emaFast[1]
+trendDown = emaFast < emaFast[1]
+
+// ---- Sinyal: breakout BB20 searah slope EMA74 ----
+breakoutUp = close > bbUpper and close[1] <= bbUpper[1]
+breakoutDown = close < bbLower and close[1] >= bbLower[1]
+
+buySignal = breakoutUp and trendUp
+sellSignal = breakoutDown and trendDown
+
+// ---- Plots ----
+plot(emaFast, "EMA 74", color=color.orange, linewidth=2)
+plot(emaSlow, "EMA 200", color=color.blue, linewidth=2)
+p1 = plot(bbUpper, "BB Upper", color=color.new(color.gray, 40))
+p2 = plot(bbLower, "BB Lower", color=color.new(color.gray, 40))
+fill(p1, p2, color=color.new(color.gray, 90))
+plot(bbBasis, "BB Basis", color=color.new(color.gray, 20))
+
+plotshape(buySignal, title="Buy", location=location.belowbar, style=shape.triangleup, color=color.green, size=size.small)
+plotshape(sellSignal, title="Sell", location=location.abovebar, style=shape.triangledown, color=color.red, size=size.small)
