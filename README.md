@@ -60,6 +60,42 @@ python scripts/predict.py \
   --tail 10
 ```
 
+## MT4 dashboard
+
+`mt4/MaduOKU_ReversalDashboard.mq4` is a chart indicator that shows the
+latest signal for a symbol across all 4 trained timeframes (M5/M15/H1/H4)
+at once, in a small on-chart panel — attach it to any single chart and
+it still shows all four. MT4 can't run Python directly, so the two
+sides are bridged through a small shared file:
+
+1. **Install the indicator**: copy `mt4/MaduOKU_ReversalDashboard.mq4`
+   into your terminal's `MQL4/Indicators/` folder (MT4: File -> Open
+   Data Folder), then compile it in MetaEditor and attach it to a
+   chart. If your broker's symbol name differs from the one used in
+   training (e.g. `XAUUSD+` instead of `XAUUSD`), set the
+   `InpSymbolOverride` input.
+
+2. **Run the exporter on a schedule** (e.g. right after your existing
+   cronjob refreshes `data/raw/*.csv` with fresh bars):
+
+   ```bash
+   python scripts/export_mt4_signal.py \
+     --symbol XAUUSD \
+     --mt4-common-files "C:/Users/you/AppData/Roaming/MetaQuotes/Terminal/Common/Files"
+   ```
+
+   This writes one small file per timeframe (e.g.
+   `MaduOKU_Signals/XAUUSD15.csv`) into MT4's shared *Common\Files*
+   folder (find it via File -> Open Data Folder -> go up one level ->
+   Common -> Files — it's shared across every terminal on the
+   machine). The indicator polls those files every `InpRefreshSeconds`
+   and repaints the dashboard.
+
+3. The dashboard flags a row **[STALE]** if its file hasn't been
+   refreshed recently (more than 3x that timeframe's bar length) —
+   a sign the exporter/cronjob has stopped running, not that the model
+   is broken.
+
 ## Notes
 
 - The train/test split is time-ordered (no shuffling) to avoid
