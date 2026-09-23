@@ -1,25 +1,21 @@
 //@version=5
-strategy("EMA 74/200 + BB 20 Breakout Strategy (Gold & Bitcoin)", overlay=true,
-     default_qty_type=strategy.percent_of_equity, default_qty_value=10,
-     initial_capital=10000, commission_type=strategy.commission.percent, commission_value=0.05)
+strategy("EMA 74/200 + BB 20 Breakout Strategy (Gold & Bitcoin)", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10, initial_capital=10000, commission_type=strategy.commission.percent, commission_value=0.05)
 
-// ───────────────────────────── Inputs ─────────────────────────────
+// ---- Inputs ----
 grpTrend = "Trend Filter (EMA)"
 emaFastLen = input.int(74, "EMA Fast", group=grpTrend)
 emaSlowLen = input.int(200, "EMA Slow", group=grpTrend)
-filterMode = input.string("Position (EMA74 vs EMA200)", "Filter mode",
-     options=["Position (EMA74 vs EMA200)", "Slope (EMA74 arah)", "Keduanya (AND)"], group=grpTrend)
+filterMode = input.string("Position (EMA74 vs EMA200)", "Filter mode", options=array.from("Position (EMA74 vs EMA200)", "Slope (EMA74 arah)", "Keduanya (AND)"), group=grpTrend)
 
 grpBB = "Bollinger Bands 20"
 bbLen = input.int(20, "BB Length", group=grpBB)
 bbMult = input.float(2.0, "BB StdDev Multiplier (k)", step=0.1, group=grpBB)
 
 grpExit = "Exit"
-exitMode = input.string("Balik ke Basis", "Exit condition",
-     options=["Balik ke Basis", "Trend berbalik", "Keduanya (OR)"], group=grpExit)
+exitMode = input.string("Balik ke Basis", "Exit condition", options=array.from("Balik ke Basis", "Trend berbalik", "Keduanya (OR)"), group=grpExit)
 
-// ───────────────────────────── Core series ─────────────────────────────
-// EMA: EMA_t = alpha*Close_t + (1-alpha)*EMA_{t-1}, alpha = 2/(len+1)
+// ---- Core series ----
+// EMA: EMA_t = alpha*Close_t + (1-alpha)*EMA_t-1, alpha = 2/(len+1)
 emaFast = ta.ema(close, emaFastLen)
 emaSlow = ta.ema(close, emaSlowLen)
 
@@ -30,15 +26,13 @@ emaSlow = ta.ema(close, emaSlowLen)
 trendPos = math.sign(emaFast - emaSlow)
 trendSlope = math.sign(emaFast - emaFast[1])
 
-trendUp = filterMode == "Position (EMA74 vs EMA200)" ? trendPos == 1 :
-          filterMode == "Slope (EMA74 arah)" ? trendSlope == 1 :
-          trendPos == 1 and trendSlope == 1
+isPositionMode = filterMode == "Position (EMA74 vs EMA200)"
+isSlopeMode = filterMode == "Slope (EMA74 arah)"
 
-trendDown = filterMode == "Position (EMA74 vs EMA200)" ? trendPos == -1 :
-            filterMode == "Slope (EMA74 arah)" ? trendSlope == -1 :
-            trendPos == -1 and trendSlope == -1
+trendUp = isPositionMode ? trendPos == 1 : isSlopeMode ? trendSlope == 1 : (trendPos == 1 and trendSlope == 1)
+trendDown = isPositionMode ? trendPos == -1 : isSlopeMode ? trendSlope == -1 : (trendPos == -1 and trendSlope == -1)
 
-// ───────────────────────────── Entry: breakout BB20 ─────────────────────────────
+// ---- Entry: breakout BB20 ----
 // Long : close tembus ke atas Upper (baru pertama kali), searah trend naik
 // Short: close tembus ke bawah Lower (baru pertama kali), searah trend turun
 breakoutUp = close > bbUpper and close[1] <= bbUpper[1]
@@ -47,26 +41,22 @@ breakoutDown = close < bbLower and close[1] >= bbLower[1]
 longSignal = breakoutUp and trendUp
 shortSignal = breakoutDown and trendDown
 
-// ───────────────────────────── Orders ─────────────────────────────
+// ---- Orders ----
 if longSignal and strategy.position_size <= 0
     strategy.entry("Long", strategy.long)
 
 if shortSignal and strategy.position_size >= 0
     strategy.entry("Short", strategy.short)
 
-// ───────────────────────────── Exit ─────────────────────────────
+// ---- Exit ----
 exitLongBasis = close < bbBasis
 exitShortBasis = close > bbBasis
-exitLongTrend = trendDown
-exitShortTrend = trendUp
 
-exitLong = exitMode == "Balik ke Basis" ? exitLongBasis :
-           exitMode == "Trend berbalik" ? exitLongTrend :
-           exitLongBasis or exitLongTrend
+isBasisExit = exitMode == "Balik ke Basis"
+isTrendExit = exitMode == "Trend berbalik"
 
-exitShort = exitMode == "Balik ke Basis" ? exitShortBasis :
-            exitMode == "Trend berbalik" ? exitShortTrend :
-            exitShortBasis or exitShortTrend
+exitLong = isBasisExit ? exitLongBasis : isTrendExit ? trendDown : (exitLongBasis or trendDown)
+exitShort = isBasisExit ? exitShortBasis : isTrendExit ? trendUp : (exitShortBasis or trendUp)
 
 if strategy.position_size > 0 and exitLong
     strategy.close("Long", comment="Exit long")
@@ -74,7 +64,7 @@ if strategy.position_size > 0 and exitLong
 if strategy.position_size < 0 and exitShort
     strategy.close("Short", comment="Exit short")
 
-// ───────────────────────────── Plots ─────────────────────────────
+// ---- Plots ----
 plot(emaFast, "EMA 74", color=color.new(color.orange, 0), linewidth=2)
 plot(emaSlow, "EMA 200", color=color.new(color.blue, 0), linewidth=2)
 p1 = plot(bbUpper, "BB Upper", color=color.new(color.gray, 40))
