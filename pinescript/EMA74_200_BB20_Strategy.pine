@@ -5,7 +5,6 @@ strategy("EMA 74/200 + BB 20 Breakout Strategy (Gold & Bitcoin)", overlay=true, 
 grpTrend = "Trend Filter (EMA)"
 emaFastLen = input.int(74, "EMA Fast", group=grpTrend)
 emaSlowLen = input.int(200, "EMA Slow", group=grpTrend)
-filterMode = input.string("Position (EMA74 vs EMA200)", "Filter mode", options=["Position (EMA74 vs EMA200)", "Slope (EMA74 arah)", "Keduanya (AND)"], group=grpTrend)
 
 grpBB = "Bollinger Bands 20"
 bbLen = input.int(20, "BB Length", group=grpBB)
@@ -22,15 +21,11 @@ emaSlow = ta.ema(close, emaSlowLen)
 // BB20: Basis = SMA20, Upper/Lower = Basis +- k*StdDev20
 [bbBasis, bbUpper, bbLower] = ta.bb(close, bbLen, bbMult)
 
-// Trend filter: posisi EMA74 vs EMA200, dan/atau slope EMA74
-trendPos = math.sign(emaFast - emaSlow)
+// Trend filter: slope EMA74 (arah kemiringan)
 trendSlope = math.sign(emaFast - emaFast[1])
 
-isPositionMode = filterMode == "Position (EMA74 vs EMA200)"
-isSlopeMode = filterMode == "Slope (EMA74 arah)"
-
-trendUp = isPositionMode ? trendPos == 1 : isSlopeMode ? trendSlope == 1 : (trendPos == 1 and trendSlope == 1)
-trendDown = isPositionMode ? trendPos == -1 : isSlopeMode ? trendSlope == -1 : (trendPos == -1 and trendSlope == -1)
+trendUp = trendSlope == 1
+trendDown = trendSlope == -1
 
 // ---- Entry: breakout BB20 ----
 // Long : close tembus ke atas Upper (baru pertama kali), searah trend naik

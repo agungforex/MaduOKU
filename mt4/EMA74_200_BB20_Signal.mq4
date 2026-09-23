@@ -38,21 +38,13 @@
 #property indicator_width7  2
 #property indicator_label7  "Sell Signal"
 
-enum ENUM_FILTER_MODE
-{
-   FILTER_POSITION = 0,  // Posisi EMA74 vs EMA200
-   FILTER_SLOPE    = 1,  // Slope EMA74
-   FILTER_BOTH     = 2   // Keduanya (AND)
-};
-
-input int              EmaFastPeriod = 74;
-input int              EmaSlowPeriod = 200;
-input int              BBPeriod      = 20;
-input double           BBDeviation   = 2.0;
-input ENUM_FILTER_MODE FilterMode    = FILTER_POSITION;
-input int              ArrowGapPoints = 10;
-input bool             EnableAlerts  = true;
-input bool             EnablePushNotification = false;
+input int    EmaFastPeriod = 74;
+input int    EmaSlowPeriod = 200;
+input int    BBPeriod      = 20;
+input double BBDeviation   = 2.0;
+input int    ArrowGapPoints = 10;
+input bool   EnableAlerts  = true;
+input bool   EnablePushNotification = false;
 
 double EmaFastBuffer[];
 double EmaSlowBuffer[];
@@ -134,26 +126,10 @@ int OnCalculate(const int rates_total,
          continue;
 
       double emaFastPrev = iMA(NULL, 0, EmaFastPeriod, 0, MODE_EMA, PRICE_CLOSE, i + 1);
+      double trendSlope  = EmaFastBuffer[i] - emaFastPrev;
 
-      double trendPos   = EmaFastBuffer[i] - EmaSlowBuffer[i];
-      double trendSlope = EmaFastBuffer[i] - emaFastPrev;
-
-      bool trendUp, trendDown;
-      switch(FilterMode)
-      {
-         case FILTER_POSITION:
-            trendUp   = trendPos > 0;
-            trendDown = trendPos < 0;
-            break;
-         case FILTER_SLOPE:
-            trendUp   = trendSlope > 0;
-            trendDown = trendSlope < 0;
-            break;
-         default: // FILTER_BOTH
-            trendUp   = trendPos > 0 && trendSlope > 0;
-            trendDown = trendPos < 0 && trendSlope < 0;
-            break;
-      }
+      bool trendUp   = trendSlope > 0;
+      bool trendDown = trendSlope < 0;
 
       bool breakoutUp   = close[i] > BBUpperBuffer[i] && close[i + 1] <= BBUpperBuffer[i + 1];
       bool breakoutDown = close[i] < BBLowerBuffer[i] && close[i + 1] >= BBLowerBuffer[i + 1];
