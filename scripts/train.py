@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from reversal.backtest import average_lead_time, evaluate_predictions  # noqa: E402
-from reversal.data import load_ohlc_csv  # noqa: E402
+from reversal.data import discover_higher_timeframes, load_ohlc_csv  # noqa: E402
 from reversal.features import build_training_set  # noqa: E402
 from reversal.labeling import build_reversal_labels  # noqa: E402
 from reversal.model import save_model, time_ordered_splits, train_model  # noqa: E402
@@ -35,16 +35,24 @@ def main() -> None:
     parser.add_argument("--out", default="models/reversal_model.joblib", help="Output path for the trained model")
     parser.add_argument("--skip-tuning", action="store_true",
                          help="Skip hyperparameter search and use DEFAULT_PARAMS (faster, for quick checks)")
+    parser.add_argument("--no-htf", action="store_true",
+                         help="Disable auto-detected higher-timeframe context features")
     args = parser.parse_args()
 
     print(f"[{args.asset}] loading {args.csv} ...")
     df = load_ohlc_csv(args.csv)
     print(f"[{args.asset}] {len(df)} bars loaded, range {df.index.min()} -> {df.index.max()}")
 
+    htf_frames = {}
+    if not args.no_htf:
+        for label, htf_path in discover_higher_timeframes(args.csv):
+            htf_frames[label] = load_ohlc_csv(htf_path)
+            print(f"[{args.asset}] using higher-timeframe context: {label} <- {htf_path}")
+
     labels = build_reversal_labels(df["close"], min_pct=args.min_pct, horizon=args.horizon)
     print(f"[{args.asset}] label distribution:\n{labels.value_counts().sort_index()}")
 
-    X, y = build_training_set(df, labels)
+    X, y = build_training_set(df, labels, htf_frames=htf_frames)
     X_train, X_val, X_test, y_train, y_val, y_test = time_ordered_splits(X, y)
     print(f"[{args.asset}] train/val/test sizes: {len(X_train)}/{len(X_val)}/{len(X_test)}, {X.shape[1]} features")
 
@@ -79,7 +87,10 @@ def main() -> None:
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    save_model({"model": model, "thresholds": thresholds, "params": best_params}, str(out_path))
+    save_model({
+        "model": model, "thresholds": thresholds, "params": best_params,
+        "htf_labels": list(htf_frames.keys()),
+    }, str(out_path))
     print(f"[{args.asset}] model saved to {out_path}")
 
 

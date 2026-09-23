@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from reversal.data import load_ohlc_csv  # noqa: E402
+from reversal.data import discover_higher_timeframes, load_ohlc_csv  # noqa: E402
 from reversal.features import build_features  # noqa: E402
 from reversal.model import load_model, predict_signals  # noqa: E402
 
@@ -26,11 +26,22 @@ def main() -> None:
     args = parser.parse_args()
 
     df = load_ohlc_csv(args.csv)
-    feats = build_features(df).dropna()
     bundle = load_model(args.model)
     model = bundle["model"] if isinstance(bundle, dict) else bundle
     thresholds = bundle.get("thresholds") if isinstance(bundle, dict) else None
+    expected_htf = bundle.get("htf_labels", []) if isinstance(bundle, dict) else []
 
+    htf_frames = {}
+    for label, htf_path in discover_higher_timeframes(args.csv):
+        htf_frames[label] = load_ohlc_csv(htf_path)
+    missing = set(expected_htf) - set(htf_frames)
+    if missing:
+        raise ValueError(
+            f"Model was trained with higher-timeframe context {sorted(missing)} "
+            f"but the matching sibling CSV(s) weren't found next to {args.csv}"
+        )
+
+    feats = build_features(df, htf_frames=htf_frames).dropna()
     signals = predict_signals(model, feats, thresholds=thresholds)
     result = df.loc[signals.index, ["close"]].join(signals)
 

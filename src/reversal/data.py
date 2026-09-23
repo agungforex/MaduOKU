@@ -1,9 +1,41 @@
 """Load and normalize OHLC(V) CSV data for reversal detection."""
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pandas as pd
 
 REQUIRED_COLUMNS = ["open", "high", "low", "close"]
+
+# Matches filenames like BTCUSD5, XAUUSD240 -> ("BTCUSD", "5")
+_SYMBOL_TF_RE = re.compile(r"^([A-Za-z]+)(\d+)$")
+
+
+def discover_higher_timeframes(csv_path: str, max_higher: int = 2) -> list[tuple[str, str]]:
+    """Given a path like data/raw/BTCUSD15.csv, find sibling CSVs for
+    the same symbol at larger timeframes (e.g. BTCUSD60.csv,
+    BTCUSD240.csv) by filename convention `<SYMBOL><MINUTES>.csv` in
+    the same directory. Returns up to `max_higher` (label, path) pairs,
+    nearest timeframe first. Returns [] if the filename doesn't match
+    the convention or no larger-timeframe sibling exists."""
+    path = Path(csv_path)
+    m = _SYMBOL_TF_RE.match(path.stem)
+    if not m:
+        return []
+    symbol, tf_str = m.groups()
+    tf = int(tf_str)
+
+    candidates = []
+    for sibling in path.parent.glob(f"{symbol}*.csv"):
+        m2 = _SYMBOL_TF_RE.match(sibling.stem)
+        if not m2 or m2.group(1) != symbol:
+            continue
+        tf2 = int(m2.group(2))
+        if tf2 > tf:
+            candidates.append((tf2, sibling))
+    candidates.sort(key=lambda x: x[0])
+    return [(f"htf{tf2}", str(p)) for tf2, p in candidates[:max_higher]]
 
 # MetaTrader history-center exports have no header row: two separate
 # date/time columns, then OHLC, then volume (optionally tick volume
