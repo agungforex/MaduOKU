@@ -11,7 +11,10 @@ from .model import LABEL_NAMES
 
 
 def evaluate(model, X_test: pd.DataFrame, y_test: pd.Series) -> str:
-    y_pred = model.predict(X_test)
+    return evaluate_predictions(y_test, model.predict(X_test))
+
+
+def evaluate_predictions(y_test: pd.Series, y_pred) -> str:
     report = classification_report(
         y_test, y_pred, target_names=[LABEL_NAMES[c] for c in sorted(LABEL_NAMES)], zero_division=0
     )

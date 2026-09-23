@@ -27,9 +27,11 @@ def main() -> None:
 
     df = load_ohlc_csv(args.csv)
     feats = build_features(df).dropna()
-    model = load_model(args.model)
+    bundle = load_model(args.model)
+    model = bundle["model"] if isinstance(bundle, dict) else bundle
+    thresholds = bundle.get("thresholds") if isinstance(bundle, dict) else None
 
-    signals = predict_signals(model, feats)
+    signals = predict_signals(model, feats, thresholds=thresholds)
     result = df.loc[signals.index, ["close"]].join(signals)
 
     print(result.tail(args.tail).to_string())
