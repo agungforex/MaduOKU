@@ -1,71 +1,51 @@
 //@version=5
-strategy("EMA 74/200 + BB 20 Pullback Strategy (Gold & Bitcoin)", overlay=true,
+strategy("EMA 74/200 + BB 20 Breakout Strategy (Gold & Bitcoin)", overlay=true,
      default_qty_type=strategy.percent_of_equity, default_qty_value=10,
      initial_capital=10000, commission_type=strategy.commission.percent, commission_value=0.05)
 
 // ───────────────────────────── Inputs ─────────────────────────────
-grpTrend = "Trend (EMA)"
-emaFastLen = input.int(74, "EMA Fast (trend)", group=grpTrend)
-emaSlowLen = input.int(200, "EMA Slow (trend)", group=grpTrend)
-requireSlope = input.bool(true, "Require EMA Slow sloping with trend", group=grpTrend)
+grpTrend = "Trend Filter (EMA)"
+emaFastLen = input.int(74, "EMA Fast", group=grpTrend)
+emaSlowLen = input.int(200, "EMA Slow", group=grpTrend)
+filterMode = input.string("Position (EMA74 vs EMA200)", "Filter mode",
+     options=["Position (EMA74 vs EMA200)", "Slope (EMA74 arah)", "Keduanya (AND)"], group=grpTrend)
 
-grpBB = "Bollinger Bands"
+grpBB = "Bollinger Bands 20"
 bbLen = input.int(20, "BB Length", group=grpBB)
-bbMult = input.float(2.0, "BB StdDev Multiplier", step=0.1, group=grpBB)
-pullbackLow = input.float(0.3, "Long entry: %B below", step=0.05, group=grpBB)
-pullbackHigh = input.float(0.7, "Short entry: %B above", step=0.05, group=grpBB)
+bbMult = input.float(2.0, "BB StdDev Multiplier (k)", step=0.1, group=grpBB)
 
-grpWidth = "Volatility / Squeeze Filter"
-useBandWidthFilter = input.bool(true, "Skip entries when BB is too tight (squeeze)", group=grpWidth)
-bwLookback = input.int(100, "BandWidth percentile lookback", group=grpWidth)
-bwMinPercentile = input.float(20, "Min BandWidth percentile to allow trade", group=grpWidth)
-
-grpRSI = "Momentum Filter"
-useRSIFilter = input.bool(true, "Use RSI filter", group=grpRSI)
-rsiLen = input.int(14, "RSI Length", group=grpRSI)
-rsiLongMin = input.float(40, "Long: RSI must be above", group=grpRSI)
-rsiLongMax = input.float(70, "Long: RSI must be below", group=grpRSI)
-rsiShortMin = input.float(30, "Short: RSI must be above", group=grpRSI)
-rsiShortMax = input.float(60, "Short: RSI must be below", group=grpRSI)
-
-grpSession = "Session Filter (recommended for Gold, off for Bitcoin)"
-useSessionFilter = input.bool(false, "Restrict entries to session", group=grpSession)
-sessionWindow = input.session("0700-1700", "Session (exchange time)", group=grpSession)
-
-grpExit = "Exit / Risk"
-atrLen = input.int(14, "ATR Length", group=grpExit)
-atrMultSL = input.float(2.0, "Stop Loss = ATR x", step=0.1, group=grpExit)
-useBasisTrail = input.bool(true, "Trail exit using BB basis (SMA20) once in profit", group=grpExit)
-exitOnTrendFlip = input.bool(true, "Exit if price closes back through EMA Fast against position", group=grpExit)
+grpExit = "Exit"
+exitMode = input.string("Balik ke Basis", "Exit condition",
+     options=["Balik ke Basis", "Trend berbalik", "Keduanya (OR)"], group=grpExit)
 
 // ───────────────────────────── Core series ─────────────────────────────
+// EMA: EMA_t = alpha*Close_t + (1-alpha)*EMA_{t-1}, alpha = 2/(len+1)
 emaFast = ta.ema(close, emaFastLen)
 emaSlow = ta.ema(close, emaSlowLen)
 
-[bbMid, bbUpper, bbLower] = ta.bb(close, bbLen, bbMult)
-percentB = (close - bbLower) / (bbUpper - bbLower)
-bandWidth = (bbUpper - bbLower) / bbMid
+// BB20: Basis = SMA20, Upper/Lower = Basis +- k*StdDev20
+[bbBasis, bbUpper, bbLower] = ta.bb(close, bbLen, bbMult)
 
-bwPercentileRank = ta.percentrank(bandWidth, bwLookback)
-bandWidthOk = not useBandWidthFilter or bwPercentileRank >= bwMinPercentile
+// Trend filter: posisi EMA74 vs EMA200, dan/atau slope EMA74
+trendPos = math.sign(emaFast - emaSlow)
+trendSlope = math.sign(emaFast - emaFast[1])
 
-rsiVal = ta.rsi(close, rsiLen)
-atrVal = ta.atr(atrLen)
+trendUp = filterMode == "Position (EMA74 vs EMA200)" ? trendPos == 1 :
+          filterMode == "Slope (EMA74 arah)" ? trendSlope == 1 :
+          trendPos == 1 and trendSlope == 1
 
-uptrend = emaFast > emaSlow and (not requireSlope or emaSlow > emaSlow[5])
-downtrend = emaFast < emaSlow and (not requireSlope or emaSlow < emaSlow[5])
+trendDown = filterMode == "Position (EMA74 vs EMA200)" ? trendPos == -1 :
+            filterMode == "Slope (EMA74 arah)" ? trendSlope == -1 :
+            trendPos == -1 and trendSlope == -1
 
-inSession = not useSessionFilter or not na(time(timeframe.period, sessionWindow))
+// ───────────────────────────── Entry: breakout BB20 ─────────────────────────────
+// Long : close tembus ke atas Upper (baru pertama kali), searah trend naik
+// Short: close tembus ke bawah Lower (baru pertama kali), searah trend turun
+breakoutUp = close > bbUpper and close[1] <= bbUpper[1]
+breakoutDown = close < bbLower and close[1] >= bbLower[1]
 
-rsiLongOk = not useRSIFilter or (rsiVal > rsiLongMin and rsiVal < rsiLongMax)
-rsiShortOk = not useRSIFilter or (rsiVal > rsiShortMin and rsiVal < rsiShortMax)
-
-// ───────────────────────────── Entry logic ─────────────────────────────
-longPullback = ta.crossover(percentB, pullbackLow)
-shortPullback = ta.crossunder(percentB, pullbackHigh)
-
-longSignal = uptrend and longPullback and bandWidthOk and rsiLongOk and inSession
-shortSignal = downtrend and shortPullback and bandWidthOk and rsiShortOk and inSession
+longSignal = breakoutUp and trendUp
+shortSignal = breakoutDown and trendDown
 
 // ───────────────────────────── Orders ─────────────────────────────
 if longSignal and strategy.position_size <= 0
@@ -74,24 +54,25 @@ if longSignal and strategy.position_size <= 0
 if shortSignal and strategy.position_size >= 0
     strategy.entry("Short", strategy.short)
 
-longStop = strategy.position_avg_price - atrMultSL * atrVal
-shortStop = strategy.position_avg_price + atrMultSL * atrVal
+// ───────────────────────────── Exit ─────────────────────────────
+exitLongBasis = close < bbBasis
+exitShortBasis = close > bbBasis
+exitLongTrend = trendDown
+exitShortTrend = trendUp
 
-var float trailStop = na
-if strategy.position_size > 0
-    trailStop := useBasisTrail and close > strategy.position_avg_price ? math.max(nz(trailStop, longStop), bbMid) : longStop
-    strategy.exit("Long Exit", "Long", stop=trailStop)
-else if strategy.position_size < 0
-    trailStop := useBasisTrail and close < strategy.position_avg_price ? math.min(nz(trailStop, shortStop), bbMid) : shortStop
-    strategy.exit("Short Exit", "Short", stop=trailStop)
-else
-    trailStop := na
+exitLong = exitMode == "Balik ke Basis" ? exitLongBasis :
+           exitMode == "Trend berbalik" ? exitLongTrend :
+           exitLongBasis or exitLongTrend
 
-if exitOnTrendFlip and strategy.position_size > 0 and ta.crossunder(close, emaFast)
-    strategy.close("Long", comment="Trend flip")
+exitShort = exitMode == "Balik ke Basis" ? exitShortBasis :
+            exitMode == "Trend berbalik" ? exitShortTrend :
+            exitShortBasis or exitShortTrend
 
-if exitOnTrendFlip and strategy.position_size < 0 and ta.crossover(close, emaFast)
-    strategy.close("Short", comment="Trend flip")
+if strategy.position_size > 0 and exitLong
+    strategy.close("Long", comment="Exit long")
+
+if strategy.position_size < 0 and exitShort
+    strategy.close("Short", comment="Exit short")
 
 // ───────────────────────────── Plots ─────────────────────────────
 plot(emaFast, "EMA 74", color=color.new(color.orange, 0), linewidth=2)
@@ -99,9 +80,9 @@ plot(emaSlow, "EMA 200", color=color.new(color.blue, 0), linewidth=2)
 p1 = plot(bbUpper, "BB Upper", color=color.new(color.gray, 40))
 p2 = plot(bbLower, "BB Lower", color=color.new(color.gray, 40))
 fill(p1, p2, color=color.new(color.gray, 90))
-plot(bbMid, "BB Basis", color=color.new(color.gray, 20))
+plot(bbBasis, "BB Basis", color=color.new(color.gray, 20))
 
-bgcolor(uptrend ? color.new(color.green, 92) : downtrend ? color.new(color.red, 92) : na)
+bgcolor(trendUp ? color.new(color.green, 92) : trendDown ? color.new(color.red, 92) : na)
 
 plotshape(longSignal, title="Long Entry", location=location.belowbar, style=shape.triangleup, color=color.green, size=size.small)
 plotshape(shortSignal, title="Short Entry", location=location.abovebar, style=shape.triangledown, color=color.red, size=size.small)
