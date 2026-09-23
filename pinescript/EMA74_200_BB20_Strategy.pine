@@ -1,18 +1,18 @@
-//@version=5
+//@version=6
 strategy("EMA 74/200 + BB 20 Breakout Strategy (Gold & Bitcoin)", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=10, initial_capital=10000, commission_type=strategy.commission.percent, commission_value=0.05)
 
 // ---- Inputs ----
 grpTrend = "Trend Filter (EMA)"
 emaFastLen = input.int(74, "EMA Fast", group=grpTrend)
 emaSlowLen = input.int(200, "EMA Slow", group=grpTrend)
-filterMode = input.string("Position (EMA74 vs EMA200)", "Filter mode", options=array.from("Position (EMA74 vs EMA200)", "Slope (EMA74 arah)", "Keduanya (AND)"), group=grpTrend)
+filterMode = input.string("Position (EMA74 vs EMA200)", "Filter mode", options=["Position (EMA74 vs EMA200)", "Slope (EMA74 arah)", "Keduanya (AND)"], group=grpTrend)
 
 grpBB = "Bollinger Bands 20"
 bbLen = input.int(20, "BB Length", group=grpBB)
 bbMult = input.float(2.0, "BB StdDev Multiplier (k)", step=0.1, group=grpBB)
 
 grpExit = "Exit"
-exitMode = input.string("Balik ke Basis", "Exit condition", options=array.from("Balik ke Basis", "Trend berbalik", "Keduanya (OR)"), group=grpExit)
+exitMode = input.string("Balik ke Basis", "Exit condition", options=["Balik ke Basis", "Trend berbalik", "Keduanya (OR)"], group=grpExit)
 
 // ---- Core series ----
 // EMA: EMA_t = alpha*Close_t + (1-alpha)*EMA_t-1, alpha = 2/(len+1)
