@@ -39,6 +39,21 @@ python -m maduoku.main --config config.example.yaml --telegram   # kirim alert
 Konfigurasi (interval, periode indikator, threshold) ada di `config.example.yaml`
 — salin ke `config.yaml` sendiri dan sesuaikan.
 
+### Backtest
+
+Validasi seberapa akurat sinyal reversal secara historis sebelum dipakai live.
+Engine ini berjalan walk-forward (hanya memakai data yang "diketahui" sampai
+bar tersebut, tanpa lookahead) dan mengukur return N bar ke depan setiap kali
+sinyal actionable muncul:
+
+```bash
+python -m maduoku.backtest_main --config config.example.yaml --symbol bitcoin --forward-bars 5
+python -m maduoku.backtest_main --config config.example.yaml --symbol gold --forward-bars 10 --step 2
+```
+
+Output: jumlah sinyal, win rate keseluruhan, rata-rata return per sinyal, dan
+breakdown per arah (bullish/bearish).
+
 ## Testing
 
 ```bash
@@ -60,8 +75,10 @@ src/maduoku/
     regime.py            # trending vs ranging (ADX)
     scoring.py           # confluence scoring -> EarlyWarning
   alerts/telegram.py     # kirim alert
-  main.py                # CLI entrypoint
-tests/                   # unit test untuk divergence & scoring
+  backtest/engine.py      # walk-forward backtest + summary stats
+  main.py                # CLI entrypoint (live scan)
+  backtest_main.py        # CLI entrypoint (backtest)
+tests/                   # unit test untuk divergence, scoring, data, backtest
 ```
 
 ## Roadmap pengembangan lanjutan
@@ -70,5 +87,6 @@ tests/                   # unit test untuk divergence & scoring
   konfirmasi tambahan sebelum reversal.
 - Filter korelasi makro (DXY, VIX) untuk gold; funding rate/open interest
   untuk bitcoin.
-- Backtesting engine untuk validasi win-rate tiap kombinasi sinyal.
 - Market regime detection yang lebih canggih (HMM) sebagai pengganti/pelengkap ADX.
+- Parameter sweep otomatis di atas backtest engine untuk mencari kombinasi
+  threshold (RSI/ADX/min_score) paling optimal per simbol.
