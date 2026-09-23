@@ -1,0 +1,191 @@
+#property copyright "MaduOKU"
+#property strict
+#property indicator_chart_window
+
+#property indicator_buffers 7
+#property indicator_plots   7
+
+#property indicator_type1   DRAW_LINE
+#property indicator_color1  clrOrange
+#property indicator_width1  2
+#property indicator_label1  "EMA Fast"
+
+#property indicator_type2   DRAW_LINE
+#property indicator_color2  clrDodgerBlue
+#property indicator_width2  2
+#property indicator_label2  "EMA Slow"
+
+#property indicator_type3   DRAW_LINE
+#property indicator_color3  clrSilver
+#property indicator_label3  "BB Upper"
+
+#property indicator_type4   DRAW_LINE
+#property indicator_color4  clrSilver
+#property indicator_label4  "BB Lower"
+
+#property indicator_type5   DRAW_LINE
+#property indicator_color5  clrGray
+#property indicator_style5  STYLE_DOT
+#property indicator_label5  "BB Basis"
+
+#property indicator_type6   DRAW_ARROW
+#property indicator_color6  clrLime
+#property indicator_width6  2
+#property indicator_label6  "Buy Signal"
+
+#property indicator_type7   DRAW_ARROW
+#property indicator_color7  clrRed
+#property indicator_width7  2
+#property indicator_label7  "Sell Signal"
+
+enum ENUM_FILTER_MODE
+{
+   FILTER_POSITION = 0,  // Posisi EMA74 vs EMA200
+   FILTER_SLOPE    = 1,  // Slope EMA74
+   FILTER_BOTH     = 2   // Keduanya (AND)
+};
+
+input int              EmaFastPeriod = 74;
+input int              EmaSlowPeriod = 200;
+input int              BBPeriod      = 20;
+input double           BBDeviation   = 2.0;
+input ENUM_FILTER_MODE FilterMode    = FILTER_POSITION;
+input int              ArrowGapPoints = 10;
+input bool             EnableAlerts  = true;
+input bool             EnablePushNotification = false;
+
+double EmaFastBuffer[];
+double EmaSlowBuffer[];
+double BBUpperBuffer[];
+double BBLowerBuffer[];
+double BBBasisBuffer[];
+double BuySignalBuffer[];
+double SellSignalBuffer[];
+
+datetime lastBuyAlertTime  = 0;
+datetime lastSellAlertTime = 0;
+
+int OnInit()
+{
+   SetIndexBuffer(0, EmaFastBuffer);
+   SetIndexBuffer(1, EmaSlowBuffer);
+   SetIndexBuffer(2, BBUpperBuffer);
+   SetIndexBuffer(3, BBLowerBuffer);
+   SetIndexBuffer(4, BBBasisBuffer);
+   SetIndexBuffer(5, BuySignalBuffer);
+   SetIndexBuffer(6, SellSignalBuffer);
+
+   ArraySetAsSeries(EmaFastBuffer, true);
+   ArraySetAsSeries(EmaSlowBuffer, true);
+   ArraySetAsSeries(BBUpperBuffer, true);
+   ArraySetAsSeries(BBLowerBuffer, true);
+   ArraySetAsSeries(BBBasisBuffer, true);
+   ArraySetAsSeries(BuySignalBuffer, true);
+   ArraySetAsSeries(SellSignalBuffer, true);
+
+   SetIndexArrow(5, 233); // panah atas
+   SetIndexArrow(6, 234); // panah bawah
+   SetIndexEmptyValue(5, EMPTY_VALUE);
+   SetIndexEmptyValue(6, EMPTY_VALUE);
+
+   IndicatorShortName("EMA " + IntegerToString(EmaFastPeriod) + "/" + IntegerToString(EmaSlowPeriod) + " + BB " + IntegerToString(BBPeriod));
+   return(INIT_SUCCEEDED);
+}
+
+int OnCalculate(const int rates_total,
+                const int prev_calculated,
+                const datetime &time[],
+                const double &open[],
+                const double &high[],
+                const double &low[],
+                const double &close[],
+                const long &tick_volume[],
+                const long &volume[],
+                const int &spread[])
+{
+   if(rates_total <= EmaSlowPeriod + 2)
+      return(0);
+
+   int limit;
+   if(prev_calculated == 0)
+      limit = rates_total - EmaSlowPeriod - 2;
+   else
+      limit = rates_total - prev_calculated + 1;
+
+   if(limit > rates_total - EmaSlowPeriod - 2)
+      limit = rates_total - EmaSlowPeriod - 2;
+   if(limit < 0)
+      limit = 0;
+
+   double gap = ArrowGapPoints * Point;
+
+   for(int i = limit; i >= 0; i--)
+   {
+      EmaFastBuffer[i] = iMA(NULL, 0, EmaFastPeriod, 0, MODE_EMA, PRICE_CLOSE, i);
+      EmaSlowBuffer[i] = iMA(NULL, 0, EmaSlowPeriod, 0, MODE_EMA, PRICE_CLOSE, i);
+      BBUpperBuffer[i] = iBands(NULL, 0, BBPeriod, BBDeviation, 0, PRICE_CLOSE, MODE_UPPER, i);
+      BBLowerBuffer[i] = iBands(NULL, 0, BBPeriod, BBDeviation, 0, PRICE_CLOSE, MODE_LOWER, i);
+      BBBasisBuffer[i] = iBands(NULL, 0, BBPeriod, BBDeviation, 0, PRICE_CLOSE, MODE_MAIN, i);
+
+      BuySignalBuffer[i]  = EMPTY_VALUE;
+      SellSignalBuffer[i] = EMPTY_VALUE;
+
+      if(i + 1 > rates_total - 1)
+         continue;
+
+      double emaFastPrev = iMA(NULL, 0, EmaFastPeriod, 0, MODE_EMA, PRICE_CLOSE, i + 1);
+
+      double trendPos   = EmaFastBuffer[i] - EmaSlowBuffer[i];
+      double trendSlope = EmaFastBuffer[i] - emaFastPrev;
+
+      bool trendUp, trendDown;
+      switch(FilterMode)
+      {
+         case FILTER_POSITION:
+            trendUp   = trendPos > 0;
+            trendDown = trendPos < 0;
+            break;
+         case FILTER_SLOPE:
+            trendUp   = trendSlope > 0;
+            trendDown = trendSlope < 0;
+            break;
+         default: // FILTER_BOTH
+            trendUp   = trendPos > 0 && trendSlope > 0;
+            trendDown = trendPos < 0 && trendSlope < 0;
+            break;
+      }
+
+      bool breakoutUp   = close[i] > BBUpperBuffer[i] && close[i + 1] <= BBUpperBuffer[i + 1];
+      bool breakoutDown = close[i] < BBLowerBuffer[i] && close[i + 1] >= BBLowerBuffer[i + 1];
+
+      if(breakoutUp && trendUp)
+         BuySignalBuffer[i] = low[i] - gap;
+
+      if(breakoutDown && trendDown)
+         SellSignalBuffer[i] = high[i] + gap;
+   }
+
+   if(EnableAlerts || EnablePushNotification)
+      CheckAlerts(time);
+
+   return(rates_total);
+}
+
+void CheckAlerts(const datetime &time[])
+{
+   if(BuySignalBuffer[1] != EMPTY_VALUE && time[1] != lastBuyAlertTime)
+   {
+      lastBuyAlertTime = time[1];
+      string msg = Symbol() + " " + EnumToString((ENUM_TIMEFRAMES)Period()) + ": BUY signal (BB20 breakout, EMA " + IntegerToString(EmaFastPeriod) + "/" + IntegerToString(EmaSlowPeriod) + " uptrend)";
+      if(EnableAlerts) Alert(msg);
+      if(EnablePushNotification) SendNotification(msg);
+   }
+
+   if(SellSignalBuffer[1] != EMPTY_VALUE && time[1] != lastSellAlertTime)
+   {
+      lastSellAlertTime = time[1];
+      string msg = Symbol() + " " + EnumToString((ENUM_TIMEFRAMES)Period()) + ": SELL signal (BB20 breakout, EMA " + IntegerToString(EmaFastPeriod) + "/" + IntegerToString(EmaSlowPeriod) + " downtrend)";
+      if(EnableAlerts) Alert(msg);
+      if(EnablePushNotification) SendNotification(msg);
+   }
+}
