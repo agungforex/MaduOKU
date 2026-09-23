@@ -1,9 +1,16 @@
-symbols:
-  gold: "GC=F"      # Gold futures (yfinance ticker)
-  bitcoin: "BTC-USD"
+data_source: "binance_futures"  # "yfinance" | "binance_futures"
 
-interval: "1h"        # 1m,5m,15m,1h,4h,1d (subject to yfinance limits per interval)
-lookback_period: "60d" # how much history to fetch
+symbols:
+  gold:
+    yfinance: "GC=F"           # Gold futures
+    binance_futures: "PAXGUSDT" # PAX Gold perpetual — tracks spot gold price
+  bitcoin:
+    yfinance: "BTC-USD"
+    binance_futures: "BTCUSDT"
+
+interval: "1h"          # 1m,5m,15m,1h,4h,1d (valid for both yfinance and Binance klines)
+lookback_period: "60d"  # used only when data_source is "yfinance"
+binance_limit: 500      # number of candles to fetch when data_source is "binance_futures" (max 1500)
 
 indicators:
   rsi_period: 14

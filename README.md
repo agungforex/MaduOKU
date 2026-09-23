@@ -5,7 +5,11 @@ dan **Bitcoin**, berbasis confluence dari beberapa indikator teknikal.
 
 ## Cara kerja
 
-1. **Fetch data** OHLCV via `yfinance` (`GC=F` untuk gold, `BTC-USD` untuk bitcoin).
+1. **Fetch data** OHLCV dari salah satu sumber (dipilih via `data_source` di config):
+   - `binance_futures` (default) — histori kline dari Binance USDⓈ-M Futures public API,
+     tanpa API key. `BTCUSDT` untuk bitcoin, `PAXGUSDT` (PAX Gold, mengikuti harga
+     spot emas) sebagai proxy gold karena Binance tidak punya kontrak XAUUSD langsung.
+   - `yfinance` — `GC=F` (gold futures) dan `BTC-USD`.
 2. **Hitung indikator**: RSI, MACD histogram, ADX.
 3. **Deteksi divergence** antara harga dan RSI/MACD di swing high/low terakhir:
    - *Regular bullish/bearish* → sinyal pembalikan (early warning).
@@ -46,7 +50,9 @@ pytest -q
 ```
 src/maduoku/
   config.py            # load YAML config
-  data/fetcher.py       # ambil OHLCV via yfinance
+  data/
+    fetcher.py           # ambil OHLCV via yfinance
+    binance_futures.py    # ambil OHLCV via Binance Futures public API
   indicators/           # RSI, MACD, ADX
   signals/
     pivots.py           # deteksi swing high/low (fractal)

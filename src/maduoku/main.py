@@ -5,6 +5,7 @@ import sys
 
 from .alerts.telegram import send_telegram_message
 from .config import Config
+from .data import binance_futures
 from .data.fetcher import fetch_ohlcv
 from .indicators.adx import adx
 from .indicators.macd import macd
@@ -14,8 +15,19 @@ from .signals.regime import classify_regime
 from .signals.scoring import EarlyWarning, score_signals
 
 
-def analyze_symbol(name: str, ticker: str, cfg: Config) -> EarlyWarning:
-    df = fetch_ohlcv(ticker, interval=cfg.interval, period=cfg.lookback_period)
+def fetch_data(name: str, cfg: Config):
+    tickers = cfg.symbols[name]
+    ticker = tickers[cfg.data_source]
+
+    if cfg.data_source == "binance_futures":
+        return binance_futures.fetch_ohlcv(ticker, interval=cfg.interval, limit=cfg.binance_limit)
+    if cfg.data_source == "yfinance":
+        return fetch_ohlcv(ticker, interval=cfg.interval, period=cfg.lookback_period)
+    raise ValueError(f"Unknown data_source: {cfg.data_source!r}")
+
+
+def analyze_symbol(name: str, cfg: Config) -> EarlyWarning:
+    df = fetch_data(name, cfg)
 
     rsi_series = rsi(df["Close"], cfg.indicators.rsi_period)
     _, _, macd_hist = macd(
@@ -53,9 +65,9 @@ def main(argv: list[str] | None = None) -> int:
     cfg = Config.from_yaml(args.config)
 
     exit_code = 0
-    for name, ticker in cfg.symbols.items():
+    for name in cfg.symbols:
         try:
-            warning = analyze_symbol(name, ticker, cfg)
+            warning = analyze_symbol(name, cfg)
         except Exception as exc:  # noqa: BLE001
             print(f"{name.upper()}: failed to analyze ({exc})", file=sys.stderr)
             exit_code = 1

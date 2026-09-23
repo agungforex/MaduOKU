@@ -38,11 +38,19 @@ class TelegramConfig:
     chat_id: str = ""
 
 
+_DEFAULT_SYMBOLS = {
+    "gold": {"yfinance": "GC=F", "binance_futures": "PAXGUSDT"},
+    "bitcoin": {"yfinance": "BTC-USD", "binance_futures": "BTCUSDT"},
+}
+
+
 @dataclass
 class Config:
-    symbols: dict = field(default_factory=lambda: {"gold": "GC=F", "bitcoin": "BTC-USD"})
+    symbols: dict = field(default_factory=lambda: dict(_DEFAULT_SYMBOLS))
+    data_source: str = "yfinance"  # "yfinance" | "binance_futures"
     interval: str = "1h"
     lookback_period: str = "60d"
+    binance_limit: int = 500
     indicators: IndicatorConfig = field(default_factory=IndicatorConfig)
     divergence: DivergenceConfig = field(default_factory=DivergenceConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
@@ -55,8 +63,10 @@ class Config:
 
         cfg = cls()
         cfg.symbols = raw.get("symbols", cfg.symbols)
+        cfg.data_source = raw.get("data_source", cfg.data_source)
         cfg.interval = raw.get("interval", cfg.interval)
         cfg.lookback_period = raw.get("lookback_period", cfg.lookback_period)
+        cfg.binance_limit = raw.get("binance_limit", cfg.binance_limit)
 
         ind = raw.get("indicators", {})
         cfg.indicators = IndicatorConfig(
