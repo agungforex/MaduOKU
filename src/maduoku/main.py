@@ -12,6 +12,7 @@ from .indicators.macd import macd
 from .indicators.rsi import rsi
 from .signals.divergence import detect_divergence
 from .signals.liquidity_sweep import detect_liquidity_sweep
+from .signals.macro import macro_bias_signal
 from .signals.regime import classify_regime
 from .signals.scoring import EarlyWarning, score_signals
 
@@ -25,6 +26,31 @@ def fetch_data(name: str, cfg: Config):
     if cfg.data_source == "yfinance":
         return fetch_ohlcv(ticker, interval=cfg.interval, period=cfg.lookback_period)
     raise ValueError(f"Unknown data_source: {cfg.data_source!r}")
+
+
+def fetch_macro_signals(name: str, cfg: Config) -> list:
+    """Macro instruments (DXY, VIX, ...) aren't on Binance Futures, so these
+    are always pulled via yfinance regardless of the main data_source. A
+    fetch failure here is non-fatal — it just means one less confluence
+    point for this run, not a failed scan.
+    """
+    entries = cfg.macro_filters.filters.get(name, [])
+    if not cfg.macro_filters.enabled or not entries:
+        return []
+
+    signals = []
+    for entry in entries:
+        try:
+            macro_df = fetch_ohlcv(entry.ticker, interval=cfg.interval, period=cfg.lookback_period)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  (macro filter {entry.ticker} unavailable: {exc})", file=sys.stderr)
+            continue
+
+        signal = macro_bias_signal(entry.ticker, macro_df["Close"], entry.correlation, cfg.macro_filters.lookback)
+        if signal:
+            signals.append(signal)
+
+    return signals
 
 
 def analyze_symbol(name: str, cfg: Config) -> EarlyWarning:
@@ -45,6 +71,8 @@ def analyze_symbol(name: str, cfg: Config) -> EarlyWarning:
 
     if cfg.liquidity_sweep.enabled:
         signals += detect_liquidity_sweep(df, cfg.liquidity_sweep.lookback)
+
+    signals += fetch_macro_signals(name, cfg)
 
     regime = classify_regime(adx_series, cfg.indicators.adx_trend_threshold)
     return score_signals(name, signals, regime, cfg.scoring.min_score_to_alert)

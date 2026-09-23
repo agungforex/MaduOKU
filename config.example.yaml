@@ -29,6 +29,22 @@ liquidity_sweep:
   enabled: true
   lookback: 20              # bars to look back for the prior high/low to sweep
 
+# Macro instruments aren't on Binance Futures, so these are always fetched via
+# yfinance regardless of data_source above. correlation: +1 = macro instrument
+# moves with the symbol, -1 = moves opposite it.
+macro_filters:
+  enabled: true
+  lookback: 5                # bars to measure the macro instrument's trend over
+  filters:
+    gold:
+      - ticker: "DX-Y.NYB"    # US Dollar Index — typically inverse to gold
+        correlation: -1
+      - ticker: "^VIX"        # risk-off flows tend to support gold
+        correlation: 1
+    bitcoin:
+      - ticker: "^VIX"        # risk-off tends to hurt risk assets like bitcoin
+        correlation: -1
+
 scoring:
   min_score_to_alert: 2     # confluence points needed before alerting
 

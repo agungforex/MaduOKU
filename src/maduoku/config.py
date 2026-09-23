@@ -33,6 +33,19 @@ class LiquiditySweepConfig:
 
 
 @dataclass
+class MacroFilterEntry:
+    ticker: str
+    correlation: int  # +1 = positively correlated, -1 = inversely correlated
+
+
+@dataclass
+class MacroFilterConfig:
+    enabled: bool = True
+    lookback: int = 5
+    filters: dict[str, list[MacroFilterEntry]] = field(default_factory=dict)
+
+
+@dataclass
 class ScoringConfig:
     min_score_to_alert: int = 2
 
@@ -60,6 +73,7 @@ class Config:
     indicators: IndicatorConfig = field(default_factory=IndicatorConfig)
     divergence: DivergenceConfig = field(default_factory=DivergenceConfig)
     liquidity_sweep: LiquiditySweepConfig = field(default_factory=LiquiditySweepConfig)
+    macro_filters: MacroFilterConfig = field(default_factory=MacroFilterConfig)
     scoring: ScoringConfig = field(default_factory=ScoringConfig)
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
 
@@ -96,6 +110,18 @@ class Config:
         cfg.liquidity_sweep = LiquiditySweepConfig(
             enabled=ls.get("enabled", True),
             lookback=ls.get("lookback", 20),
+        )
+
+        mf = raw.get("macro_filters", {})
+        filters_raw = mf.get("filters", {})
+        filters = {
+            symbol: [MacroFilterEntry(ticker=e["ticker"], correlation=e["correlation"]) for e in entries]
+            for symbol, entries in filters_raw.items()
+        }
+        cfg.macro_filters = MacroFilterConfig(
+            enabled=mf.get("enabled", True),
+            lookback=mf.get("lookback", 5),
+            filters=filters,
         )
 
         sc = raw.get("scoring", {})

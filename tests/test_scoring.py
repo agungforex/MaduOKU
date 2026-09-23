@@ -1,5 +1,6 @@
 from maduoku.signals.divergence import DivergenceSignal
 from maduoku.signals.liquidity_sweep import SweepSignal
+from maduoku.signals.macro import MacroSignal
 from maduoku.signals.regime import RegimeState
 from maduoku.signals.scoring import score_signals
 
@@ -55,3 +56,16 @@ def test_sweep_alone_below_threshold_does_not_trigger():
     warning = score_signals("bitcoin", signals, regime, min_score_to_alert=2)
 
     assert warning.direction == "none"
+
+
+def test_divergence_plus_macro_confluence_triggers_alert():
+    signals = [
+        DivergenceSignal("regular_bullish", "RSI", None, "detail"),
+        MacroSignal("macro_bullish", "DXY", None, "DXY trending down (inverse correlation)"),
+    ]
+    regime = RegimeState(trending=True, adx_value=30.0)
+
+    warning = score_signals("gold", signals, regime, min_score_to_alert=2)
+
+    assert warning.direction == "bullish"
+    assert warning.score >= 2

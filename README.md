@@ -17,11 +17,15 @@ dan **Bitcoin**, berbasis confluence dari beberapa indikator teknikal.
 4. **Deteksi liquidity sweep** (Smart Money Concepts): harga menembus swing high/low
    `lookback` bar terakhir lalu ditutup kembali di dalam range — tanda stop order
    "disapu" sebelum reversal.
-5. **Klasifikasi regime** pasar (trending vs ranging) via ADX — reversal di pasar
+5. **Filter korelasi makro** (opsional): tren DXY/VIX terbaru diterjemahkan jadi
+   bias bullish/bearish untuk simbol yang berkorelasi (mis. DXY naik → bearish
+   untuk gold, VIX naik → risk-off yang mendukung gold & menekan bitcoin).
+   Selalu diambil via `yfinance` karena tidak tersedia di Binance Futures.
+6. **Klasifikasi regime** pasar (trending vs ranging) via ADX — reversal di pasar
    ranging dianggap lebih andal.
-6. **Scoring confluence**: gabungkan semua bukti (divergence + sweep) jadi satu
-   skor. Alert hanya dikirim jika skor ≥ `min_score_to_alert`.
-7. **Alert** opsional ke Telegram.
+7. **Scoring confluence**: gabungkan semua bukti (divergence + sweep + makro)
+   jadi satu skor. Alert hanya dikirim jika skor ≥ `min_score_to_alert`.
+8. **Alert** opsional ke Telegram.
 
 ## Instalasi
 
@@ -72,6 +76,10 @@ Kombinasi dengan sinyal lebih sedikit dari `--min-signals` dibuang (biar tidak
 tertipu win rate tinggi dari cuma 2 sinyal kebetulan). Hasil diurutkan dari
 rata-rata return tertinggi.
 
+> **Catatan**: filter korelasi makro belum masuk ke dalam backtest/sweep —
+> keduanya hanya mensimulasikan divergence + liquidity sweep + regime ADX.
+> Live scan (`main`) sudah menyertakan filter makro sepenuhnya.
+
 ## Testing
 
 ```bash
@@ -91,6 +99,7 @@ src/maduoku/
     pivots.py           # deteksi swing high/low (fractal)
     divergence.py        # regular & hidden divergence
     liquidity_sweep.py    # deteksi stop-hunt / liquidity sweep
+    macro.py              # bias bullish/bearish dari tren DXY/VIX
     regime.py            # trending vs ranging (ADX)
     scoring.py           # confluence scoring -> EarlyWarning
   alerts/telegram.py     # kirim alert
@@ -105,6 +114,7 @@ tests/                   # unit test untuk divergence, scoring, data, backtest, 
 
 ## Roadmap pengembangan lanjutan
 
-- Filter korelasi makro (DXY, VIX) untuk gold; funding rate/open interest
-  untuk bitcoin.
+- Sertakan filter korelasi makro ke dalam backtest/sweep (perlu menyelaraskan
+  histori DXY/VIX per-timestamp dengan simbol utama secara walk-forward).
+- Funding rate / open interest Binance sebagai konfirmasi tambahan untuk bitcoin.
 - Market regime detection yang lebih canggih (HMM) sebagai pengganti/pelengkap ADX.

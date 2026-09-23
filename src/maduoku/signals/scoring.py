@@ -5,12 +5,13 @@ from typing import Union
 
 from .divergence import DivergenceSignal
 from .liquidity_sweep import SweepSignal
+from .macro import MacroSignal
 from .regime import RegimeState
 
-Signal = Union[DivergenceSignal, SweepSignal]
+Signal = Union[DivergenceSignal, SweepSignal, MacroSignal]
 
-BULLISH_REVERSAL = {"regular_bullish", "bullish_sweep"}
-BEARISH_REVERSAL = {"regular_bearish", "bearish_sweep"}
+BULLISH_REVERSAL = {"regular_bullish", "bullish_sweep", "macro_bullish"}
+BEARISH_REVERSAL = {"regular_bearish", "bearish_sweep", "macro_bearish"}
 
 
 @dataclass
