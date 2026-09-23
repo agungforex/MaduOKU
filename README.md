@@ -62,6 +62,33 @@ python scripts/predict.py \
 
 ## MT4 dashboard
 
+Two options, same on-chart look (a small panel with signals for
+M5/M15/H1/H4), different trade-offs:
+
+- **`MaduOKU_ReversalDashboard_Standalone.mq4`** — pure MQL4, one file,
+  no setup beyond compiling and dragging it onto a chart. Computes a
+  rule-based reversal score natively from RSI, MACD, Bollinger Bands,
+  RSI/price divergence and candlestick patterns. Doesn't use the
+  trained ML models, so it's less accurate than the tuned pipeline,
+  but has zero moving parts (no Python, no Task Scheduler, no shared
+  files). Good default if you just want something simple that works.
+- **`MaduOKU_ReversalDashboard.mq4`** — reads signals produced by the
+  trained ML models (with hyperparameter + threshold tuning and
+  multi-timeframe context), via `scripts/export_mt4_signal.py` and
+  Windows Task Scheduler (see below). More accurate, more setup.
+
+### Standalone (recommended for simplicity)
+
+Copy `mt4/MaduOKU_ReversalDashboard_Standalone.mq4` into your
+terminal's `MQL4/Indicators/` folder (MT4: File -> Open Data Folder),
+compile it in MetaEditor, and attach it to any chart. That's it — no
+Python, no cronjob. `InpMinScore` controls how many aligned signals
+(RSI, MACD cross, Bollinger touch, divergence, candlestick pattern)
+are required before it flags a reversal; raise it for fewer, higher-
+conviction alerts.
+
+### ML-backed (ADVANCED — via Python bridge)
+
 `mt4/MaduOKU_ReversalDashboard.mq4` is a chart indicator that shows the
 latest signal for a symbol across all 4 trained timeframes (M5/M15/H1/H4)
 at once, in a small on-chart panel — attach it to any single chart and
