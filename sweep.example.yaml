@@ -1,0 +1,6 @@
+# Parameter grid for `python -m maduoku.sweep_main`.
+# Dotted keys map to nested Config fields; every combination is backtested.
+grid:
+  indicators.adx_trend_threshold: [20, 25, 30]
+  liquidity_sweep.lookback: [10, 20, 30]
+  scoring.min_score_to_alert: [2, 3]

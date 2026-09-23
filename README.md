@@ -57,6 +57,21 @@ python -m maduoku.backtest_main --config config.example.yaml --symbol gold --for
 Output: jumlah sinyal, win rate keseluruhan, rata-rata return per sinyal, dan
 breakdown per arah (bullish/bearish).
 
+### Parameter sweep
+
+Cari kombinasi threshold (ADX, lookback liquidity sweep, min_score, dll) yang
+paling baik performanya, dengan menjalankan backtest untuk setiap kombinasi
+parameter di `sweep.example.yaml`:
+
+```bash
+python -m maduoku.sweep_main --config config.example.yaml --grid sweep.example.yaml --symbol bitcoin
+python -m maduoku.sweep_main --grid sweep.example.yaml --symbol gold --min-signals 10 --out results.csv
+```
+
+Kombinasi dengan sinyal lebih sedikit dari `--min-signals` dibuang (biar tidak
+tertipu win rate tinggi dari cuma 2 sinyal kebetulan). Hasil diurutkan dari
+rata-rata return tertinggi.
+
 ## Testing
 
 ```bash
@@ -79,10 +94,13 @@ src/maduoku/
     regime.py            # trending vs ranging (ADX)
     scoring.py           # confluence scoring -> EarlyWarning
   alerts/telegram.py     # kirim alert
-  backtest/engine.py      # walk-forward backtest + summary stats
+  backtest/
+    engine.py             # walk-forward backtest + summary stats
+    sweep.py               # grid search parameter terbaik di atas engine
   main.py                # CLI entrypoint (live scan)
   backtest_main.py        # CLI entrypoint (backtest)
-tests/                   # unit test untuk divergence, scoring, data, backtest
+  sweep_main.py           # CLI entrypoint (parameter sweep)
+tests/                   # unit test untuk divergence, scoring, data, backtest, sweep
 ```
 
 ## Roadmap pengembangan lanjutan
@@ -90,5 +108,3 @@ tests/                   # unit test untuk divergence, scoring, data, backtest
 - Filter korelasi makro (DXY, VIX) untuk gold; funding rate/open interest
   untuk bitcoin.
 - Market regime detection yang lebih canggih (HMM) sebagai pengganti/pelengkap ADX.
-- Parameter sweep otomatis di atas backtest engine untuk mencari kombinasi
-  threshold (RSI/ADX/min_score) paling optimal per simbol.
