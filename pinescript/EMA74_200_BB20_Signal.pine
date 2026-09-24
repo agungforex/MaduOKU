@@ -15,16 +15,25 @@ emaSlow = ta.ema(close, emaSlowLen)
 // BB20: Basis = SMA20, Upper/Lower = Basis +- k*StdDev20
 [bbBasis, bbUpper, bbLower] = ta.bb(close, bbLen, bbMult)
 
-// Trend filter: slope EMA74 (arah kemiringan)
-trendUp = emaFast > emaFast[1]
-trendDown = emaFast < emaFast[1]
+// Slope EMA74 dan slope BB basis (arah kemiringan)
+emaFastUp = emaFast > emaFast[1]
+emaFastDown = emaFast < emaFast[1]
+basisUp = bbBasis > bbBasis[1]
+basisDown = bbBasis < bbBasis[1]
 
-// ---- Sinyal: breakout BB20 searah slope EMA74 ----
+// ---- Signal 1: breakout BB20 searah slope EMA74 ----
 breakoutUp = close > bbUpper and close[1] <= bbUpper[1]
 breakoutDown = close < bbLower and close[1] >= bbLower[1]
 
-buySignal = breakoutUp and trendUp
-sellSignal = breakoutDown and trendDown
+buySignal1 = breakoutUp and emaFastUp
+sellSignal1 = breakoutDown and emaFastDown
+
+// ---- Signal 2: cross garis tengah BB20, filter slope basis ATAU slope EMA74 searah ----
+crossBasisUp = ta.crossover(close, bbBasis)
+crossBasisDown = ta.crossunder(close, bbBasis)
+
+buySignal2 = crossBasisUp and (basisUp or emaFastUp)
+sellSignal2 = crossBasisDown and (basisDown or emaFastDown)
 
 // ---- Plots ----
 plot(emaFast, "EMA 74", color=color.orange, linewidth=2)
@@ -34,5 +43,8 @@ p2 = plot(bbLower, "BB Lower", color=color.new(color.gray, 40))
 fill(p1, p2, color=color.new(color.gray, 90))
 plot(bbBasis, "BB Basis", color=color.new(color.gray, 20))
 
-plotshape(buySignal, title="Buy", location=location.belowbar, style=shape.triangleup, color=color.green, size=size.small)
-plotshape(sellSignal, title="Sell", location=location.abovebar, style=shape.triangledown, color=color.red, size=size.small)
+plotshape(buySignal1, title="Buy Signal 1", location=location.belowbar, style=shape.triangleup, color=color.green, size=size.small)
+plotshape(sellSignal1, title="Sell Signal 1", location=location.abovebar, style=shape.triangledown, color=color.red, size=size.small)
+
+plotshape(buySignal2, title="Buy Signal 2", location=location.belowbar, style=shape.circle, color=color.lime, size=size.tiny)
+plotshape(sellSignal2, title="Sell Signal 2", location=location.abovebar, style=shape.circle, color=color.maroon, size=size.tiny)
