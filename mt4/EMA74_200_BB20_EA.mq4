@@ -28,7 +28,38 @@ datetime lastBarTime = 0;
 
 int OnInit()
 {
+   ShowPanel();
    return(INIT_SUCCEEDED);
+}
+
+void OnDeinit(const int reason)
+{
+   Comment("");
+}
+
+string TradeModeToString()
+{
+   if(TradeMode == BUY_ONLY)  return "BUY ONLY";
+   if(TradeMode == SELL_ONLY) return "SELL ONLY";
+   return "BOTH";
+}
+
+void ShowPanel()
+{
+   int ticket, type;
+   bool hasPosition = HasOpenPosition(ticket, type);
+   string posText = hasPosition ? (type == OP_BUY ? "BUY open" : "SELL open") : "Tidak ada posisi";
+
+   string text = "";
+   text += "=== EMA74/200 + BB20 EA ===\n";
+   text += "Breakout BB20 + slope EMA74 : " + (EnableSignal1 ? "true" : "false") + "\n";
+   text += "Cross BB20 basis + slope basis/EMA74 : " + (EnableSignal2 ? "true" : "false") + "\n";
+   text += "TradeMode : " + TradeModeToString() + "\n";
+   text += "TF yang dibaca EA, independen dari chart : " + EnumToString(ActiveTimeframe) + "\n";
+   text += "LotSize : " + DoubleToString(LotSize, 2) + "\n";
+   text += "Posisi : " + posText;
+
+   Comment(text);
 }
 
 double EmaFastAt(int shift)
@@ -166,6 +197,8 @@ void OpenSell()
 
 void OnTick()
 {
+   ShowPanel();
+
    datetime currentBarTime = iTime(NULL, ActiveTimeframe, 0);
    if(currentBarTime == lastBarTime)
       return;
