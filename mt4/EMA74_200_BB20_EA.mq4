@@ -146,19 +146,22 @@ bool HasOpenPosition(int &ticket, int &type)
 void ClosePosition(int ticket, int type)
 {
    double price = (type == OP_BUY) ? Bid : Ask;
-   OrderClose(ticket, LotSize, price, Slippage, clrYellow);
+   if(!OrderClose(ticket, LotSize, price, Slippage, clrYellow))
+      Print("OrderClose gagal, ticket=", ticket, " error=", GetLastError());
 }
 
 void OpenBuy()
 {
    double sl = SwingLowSL();
-   OrderSend(Symbol(), OP_BUY, LotSize, Ask, Slippage, sl, 0, "EMA74/200 BB20 EA", MagicNumber, 0, clrGreen);
+   if(OrderSend(Symbol(), OP_BUY, LotSize, Ask, Slippage, sl, 0, "EMA74/200 BB20 EA", MagicNumber, 0, clrGreen) < 0)
+      Print("OrderSend BUY gagal, error=", GetLastError());
 }
 
 void OpenSell()
 {
    double sl = SwingHighSL();
-   OrderSend(Symbol(), OP_SELL, LotSize, Bid, Slippage, sl, 0, "EMA74/200 BB20 EA", MagicNumber, 0, clrRed);
+   if(OrderSend(Symbol(), OP_SELL, LotSize, Bid, Slippage, sl, 0, "EMA74/200 BB20 EA", MagicNumber, 0, clrRed) < 0)
+      Print("OrderSend SELL gagal, error=", GetLastError());
 }
 
 void OnTick()
