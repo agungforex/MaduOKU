@@ -214,15 +214,21 @@ void OnTick()
       return;
    lastBarTime = currentBarTime;
 
-   bool buySignal  = (TradeMode == BUY_ONLY  || TradeMode == BOTH) && CheckBuySignal();
-   bool sellSignal = (TradeMode == SELL_ONLY || TradeMode == BOTH) && CheckSellSignal();
+   // Raw signal dari indikator, TIDAK difilter TradeMode -> dipakai khusus untuk close posisi
+   bool rawBuySignal  = CheckBuySignal();
+   bool rawSellSignal = CheckSellSignal();
+
+   // Signal untuk entry baru, difilter TradeMode (BUY_ONLY/SELL_ONLY/BOTH)
+   bool buyEntrySignal  = (TradeMode == BUY_ONLY  || TradeMode == BOTH) && rawBuySignal;
+   bool sellEntrySignal = (TradeMode == SELL_ONLY || TradeMode == BOTH) && rawSellSignal;
 
    int ticket, type;
    bool hasPosition = HasOpenPosition(ticket, type);
 
    if(hasPosition)
    {
-      bool oppositeSignal = (type == OP_BUY && sellSignal) || (type == OP_SELL && buySignal);
+      // Close pakai raw signal, tidak peduli TradeMode
+      bool oppositeSignal = (type == OP_BUY && rawSellSignal) || (type == OP_SELL && rawBuySignal);
 
       if(CloseOnOppositeSignal && oppositeSignal && IsFloatingProfit(ticket))
       {
@@ -237,9 +243,10 @@ void OnTick()
 
    if(!hasPosition)
    {
-      if(buySignal)
+      // Entry baru (termasuk reverse setelah close) tetap ikut TradeMode
+      if(buyEntrySignal)
          OpenBuy();
-      else if(sellSignal)
+      else if(sellEntrySignal)
          OpenSell();
    }
 }
