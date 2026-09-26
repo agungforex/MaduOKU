@@ -21,6 +21,7 @@ input ENUM_TIMEFRAMES  ActiveTimeframe = PERIOD_M15; // TF yang dibaca EA, indep
 
 input double           LotSize         = 0.01;
 input int              SwingLookback   = 24;   // jumlah candle ke belakang untuk cari swing high/low SL
+input bool             CloseOnOppositeSignal = true; // Close posisi jika ada signal berlawanan (hanya saat floating profit > 0)
 input int              MagicNumber     = 74200;
 input int              Slippage        = 5;
 
@@ -57,6 +58,7 @@ void ShowPanel()
    text += "TradeMode : " + TradeModeToString() + "\n";
    text += "TF yang dibaca EA, independen dari chart : " + EnumToString(ActiveTimeframe) + "\n";
    text += "LotSize : " + DoubleToString(LotSize, 2) + "\n";
+   text += "Close on opposite signal (jika profit) : " + (CloseOnOppositeSignal ? "true" : "false") + "\n";
    text += "Posisi : " + posText;
 
    Comment(text);
@@ -158,6 +160,14 @@ double SwingHighSL()
    return swingHigh + MarketInfo(Symbol(), MODE_SPREAD) * Point;
 }
 
+bool IsFloatingProfit(int ticket)
+{
+   if(!OrderSelect(ticket, SELECT_BY_TICKET))
+      return false;
+   double floating = OrderProfit() + OrderSwap() + OrderCommission();
+   return floating > 0;
+}
+
 bool HasOpenPosition(int &ticket, int &type)
 {
    for(int i = 0; i < OrdersTotal(); i++)
@@ -212,19 +222,16 @@ void OnTick()
 
    if(hasPosition)
    {
-      if(type == OP_BUY && sellSignal)
-      {
-         ClosePosition(ticket, type);
-         hasPosition = false;
-      }
-      else if(type == OP_SELL && buySignal)
+      bool oppositeSignal = (type == OP_BUY && sellSignal) || (type == OP_SELL && buySignal);
+
+      if(CloseOnOppositeSignal && oppositeSignal && IsFloatingProfit(ticket))
       {
          ClosePosition(ticket, type);
          hasPosition = false;
       }
       else
       {
-         return; // posisi searah masih terbuka, sinyal baru diabaikan
+         return; // posisi searah, sinyal berlawanan saat floating loss, atau fitur close nonaktif
       }
    }
 
