@@ -22,6 +22,8 @@ input ENUM_TIMEFRAMES  ActiveTimeframe = PERIOD_M15; // TF yang dibaca EA, indep
 input double           LotSize         = 0.01;
 input int              SwingLookback   = 24;   // jumlah candle ke belakang untuk cari swing high/low SL
 input bool             CloseOnOppositeSignal = true; // Close posisi jika ada signal berlawanan (hanya saat floating profit > 0)
+input bool             RequireBOS      = true;  // Signal valid hanya jika searah BOS terakhir
+input int              BosLookback     = 50;    // BOS harus terjadi dalam N candle terakhir
 input int              MagicNumber     = 74200;
 input int              Slippage        = 5;
 
@@ -59,6 +61,7 @@ void ShowPanel()
    text += "TF yang dibaca EA, independen dari chart : " + EnumToString(ActiveTimeframe) + "\n";
    text += "LotSize : " + DoubleToString(LotSize, 2) + "\n";
    text += "Close on opposite signal (jika profit) : " + (CloseOnOppositeSignal ? "true" : "false") + "\n";
+   text += "Wajib searah BOS (N=" + IntegerToString(BosLookback) + ") : " + (RequireBOS ? "true" : "false") + "\n";
    text += "Posisi : " + posText;
 
    Comment(text);
@@ -87,6 +90,43 @@ double LowerAt(int shift)
 double CloseAt(int shift)
 {
    return iClose(NULL, ActiveTimeframe, shift);
+}
+
+// Cari BOS (Break of Structure) terakhir dalam N candle terakhir.
+// Swing high/low pakai fractal 5-bar bawaan MT4 (iFractals), validasi pakai close candle.
+// Return: 1 = BOS bullish terakhir, -1 = BOS bearish terakhir, 0 = tidak ada BOS dalam lookback.
+int GetBOSDirection(int lookback)
+{
+   double swingHigh = -1.0;
+   double swingLow  = -1.0;
+   int    lastBOS    = 0;
+
+   int scanStart = lookback + 20; // bar tambahan untuk cari swing awal sebelum window lookback dimulai
+
+   for(int s = scanStart; s >= 3; s--)
+   {
+      double fh = iFractals(NULL, ActiveTimeframe, MODE_UPPER, s);
+      double fl = iFractals(NULL, ActiveTimeframe, MODE_LOWER, s);
+      if(fh != 0.0) swingHigh = fh;
+      if(fl != 0.0) swingLow  = fl;
+
+      if(s <= lookback)
+      {
+         double closeAtS = iClose(NULL, ActiveTimeframe, s);
+         if(swingHigh > 0 && closeAtS > swingHigh)
+         {
+            lastBOS = 1;
+            swingHigh = -1.0; // tunggu fractal baru sebelum BOS bullish berikutnya bisa terdeteksi lagi
+         }
+         else if(swingLow > 0 && closeAtS < swingLow)
+         {
+            lastBOS = -1;
+            swingLow = -1.0;
+         }
+      }
+   }
+
+   return lastBOS;
 }
 
 // shift 1 = candle terakhir yang sudah closed (dievaluasi sebagai "candle sekarang" untuk sinyal)
@@ -217,6 +257,13 @@ void OnTick()
    // Raw signal dari indikator, TIDAK difilter TradeMode -> dipakai khusus untuk close posisi
    bool rawBuySignal  = CheckBuySignal();
    bool rawSellSignal = CheckSellSignal();
+
+   if(RequireBOS)
+   {
+      int bosDir = GetBOSDirection(BosLookback);
+      rawBuySignal  = rawBuySignal  && (bosDir == 1);
+      rawSellSignal = rawSellSignal && (bosDir == -1);
+   }
 
    // Signal untuk entry baru, difilter TradeMode (BUY_ONLY/SELL_ONLY/BOTH)
    bool buyEntrySignal  = (TradeMode == BUY_ONLY  || TradeMode == BOTH) && rawBuySignal;
