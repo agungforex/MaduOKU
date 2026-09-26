@@ -7,6 +7,9 @@ emaSlowLen = input.int(200, "EMA Slow")
 bbLen = input.int(20, "BB Length")
 bbMult = input.float(2.0, "BB StdDev Multiplier (k)", step=0.1)
 
+requireBOS = input.bool(true, "Signal valid hanya jika searah BOS terakhir", group="BOS Filter")
+bosLookback = input.int(50, "BOS harus terjadi dalam N candle terakhir", group="BOS Filter")
+
 // ---- Core series ----
 // EMA: EMA_t = alpha*Close_t + (1-alpha)*EMA_t-1, alpha = 2/(len+1)
 emaFast = ta.ema(close, emaFastLen)
@@ -21,19 +24,46 @@ emaFastDown = emaFast < emaFast[1]
 basisUp = bbBasis > bbBasis[1]
 basisDown = bbBasis < bbBasis[1]
 
+// ---- BOS (Break of Structure): fractal 5-bar (2 kiri, 2 kanan), validasi close, harus fresh dalam N candle ----
+pivotHigh = ta.pivothigh(high, 2, 2)
+pivotLow = ta.pivotlow(low, 2, 2)
+
+var float swingHigh = na
+var float swingLow = na
+var int bosDir = 0
+var int bosBarIndex = na
+
+if not na(pivotHigh)
+    swingHigh := pivotHigh
+if not na(pivotLow)
+    swingLow := pivotLow
+
+if not na(swingHigh) and close > swingHigh
+    bosDir := 1
+    bosBarIndex := bar_index
+    swingHigh := na
+if not na(swingLow) and close < swingLow
+    bosDir := -1
+    bosBarIndex := bar_index
+    swingLow := na
+
+bosFresh = not na(bosBarIndex) and (bar_index - bosBarIndex) <= bosLookback
+bosBullish = not requireBOS or (bosFresh and bosDir == 1)
+bosBearish = not requireBOS or (bosFresh and bosDir == -1)
+
 // ---- Signal 1: breakout BB20 searah slope EMA74 ----
 breakoutUp = close > bbUpper and close[1] <= bbUpper[1]
 breakoutDown = close < bbLower and close[1] >= bbLower[1]
 
-buySignal1 = breakoutUp and emaFastUp
-sellSignal1 = breakoutDown and emaFastDown
+buySignal1 = breakoutUp and emaFastUp and bosBullish
+sellSignal1 = breakoutDown and emaFastDown and bosBearish
 
 // ---- Signal 2: cross garis tengah BB20, filter slope basis ATAU slope EMA74 searah ----
 crossBasisUp = ta.crossover(close, bbBasis)
 crossBasisDown = ta.crossunder(close, bbBasis)
 
-buySignal2 = crossBasisUp and (basisUp or emaFastUp)
-sellSignal2 = crossBasisDown and (basisDown or emaFastDown)
+buySignal2 = crossBasisUp and (basisUp or emaFastUp) and bosBullish
+sellSignal2 = crossBasisDown and (basisDown or emaFastDown) and bosBearish
 
 // ---- Plots ----
 plot(emaFast, "EMA 74", color=color.orange, linewidth=2)

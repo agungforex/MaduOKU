@@ -52,6 +52,8 @@ input int    EmaFastPeriod = 74;
 input int    EmaSlowPeriod = 200;
 input int    BBPeriod      = 20;
 input double BBDeviation   = 2.0;
+input bool   RequireBOS    = true;  // Signal valid hanya jika searah BOS terakhir
+input int    BosLookback   = 50;    // BOS harus terjadi dalam N candle terakhir
 input int    ArrowGapPoints = 10;
 input bool   EnableAlerts  = true;
 input bool   EnablePushNotification = false;
@@ -106,6 +108,49 @@ int OnInit()
    return(INIT_SUCCEEDED);
 }
 
+// Cari BOS (Break of Structure) terakhir dalam N candle terakhir, dihitung dari sudut pandang
+// candle "refShift" (0 = candle sekarang, dst). Swing high/low pakai fractal 5-bar, validasi close.
+// Return: 1 = BOS bullish terakhir, -1 = BOS bearish terakhir, 0 = tidak ada BOS dalam lookback.
+int GetBOSDirectionAt(const double &high[], const double &low[], const double &close[],
+                       int refShift, int lookback, int totalBars)
+{
+   double swingHigh = -1.0;
+   double swingLow  = -1.0;
+   int    lastBOS    = 0;
+
+   int scanStartRel = lookback + 20;
+
+   for(int rel = scanStartRel; rel >= 3; rel--)
+   {
+      int idx = refShift + rel - 1;
+      if(idx - 2 < 0 || idx + 2 >= totalBars)
+         continue;
+
+      bool isFractalHigh = high[idx] > high[idx-1] && high[idx] > high[idx-2] && high[idx] > high[idx+1] && high[idx] > high[idx+2];
+      bool isFractalLow  = low[idx]  < low[idx-1]  && low[idx]  < low[idx-2]  && low[idx]  < low[idx+1]  && low[idx]  < low[idx+2];
+
+      if(isFractalHigh) swingHigh = high[idx];
+      if(isFractalLow)  swingLow  = low[idx];
+
+      if(rel <= lookback)
+      {
+         double c = close[idx];
+         if(swingHigh > 0 && c > swingHigh)
+         {
+            lastBOS = 1;
+            swingHigh = -1.0;
+         }
+         else if(swingLow > 0 && c < swingLow)
+         {
+            lastBOS = -1;
+            swingLow = -1.0;
+         }
+      }
+   }
+
+   return lastBOS;
+}
+
 int OnCalculate(const int rates_total,
                 const int prev_calculated,
                 const datetime &time[],
@@ -157,24 +202,33 @@ int OnCalculate(const int rates_total,
       bool basisUp     = BBBasisBuffer[i] > basisPrev;
       bool basisDown   = BBBasisBuffer[i] < basisPrev;
 
+      bool bosBullish = true;
+      bool bosBearish = true;
+      if(RequireBOS)
+      {
+         int bosDir = GetBOSDirectionAt(high, low, close, i, BosLookback, rates_total);
+         bosBullish = (bosDir == 1);
+         bosBearish = (bosDir == -1);
+      }
+
       // Signal 1: breakout BB20 searah slope EMA74
       bool breakoutUp   = close[i] > BBUpperBuffer[i] && close[i + 1] <= BBUpperBuffer[i + 1];
       bool breakoutDown = close[i] < BBLowerBuffer[i] && close[i + 1] >= BBLowerBuffer[i + 1];
 
-      if(breakoutUp && emaFastUp)
+      if(breakoutUp && emaFastUp && bosBullish)
          BuySignal1Buffer[i] = low[i] - gap;
 
-      if(breakoutDown && emaFastDown)
+      if(breakoutDown && emaFastDown && bosBearish)
          SellSignal1Buffer[i] = high[i] + gap;
 
       // Signal 2: cross garis tengah BB20, filter slope basis ATAU slope EMA74 searah
       bool crossBasisUp   = close[i] > BBBasisBuffer[i] && close[i + 1] <= BBBasisBuffer[i + 1];
       bool crossBasisDown = close[i] < BBBasisBuffer[i] && close[i + 1] >= BBBasisBuffer[i + 1];
 
-      if(crossBasisUp && (basisUp || emaFastUp))
+      if(crossBasisUp && (basisUp || emaFastUp) && bosBullish)
          BuySignal2Buffer[i] = low[i] - gap;
 
-      if(crossBasisDown && (basisDown || emaFastDown))
+      if(crossBasisDown && (basisDown || emaFastDown) && bosBearish)
          SellSignal2Buffer[i] = high[i] + gap;
    }
 
