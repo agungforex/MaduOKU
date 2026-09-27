@@ -20,8 +20,9 @@ input ENUM_TRADE_MODE  TradeMode       = BOTH;
 input ENUM_TIMEFRAMES  ActiveTimeframe = PERIOD_M15; // TF yang dibaca EA, independen dari chart
 
 input double           LotSize         = 0.01;
+input int              MaxPositions    = 1;     // Maksimal posisi searah yang boleh terbuka bersamaan
 input int              SwingLookback   = 24;   // jumlah candle ke belakang untuk cari swing high/low SL
-input bool             CloseOnOppositeSignal = true; // Close posisi jika ada signal berlawanan (hanya saat floating profit > 0)
+input bool             CloseOnOppositeSignal = true; // Close semua posisi jika ada signal berlawanan (hanya saat total floating profit > 0)
 input bool             RequireBOS      = true;  // Signal valid hanya jika searah BOS terakhir
 input int              BosLookback     = 50;    // BOS harus terjadi dalam N candle terakhir
 input int              MagicNumber     = 74200;
@@ -49,9 +50,10 @@ string TradeModeToString()
 
 void ShowPanel()
 {
-   int ticket, type;
-   bool hasPosition = HasOpenPosition(ticket, type);
-   string posText = hasPosition ? (type == OP_BUY ? "BUY open" : "SELL open") : "Tidak ada posisi";
+   int type;
+   double totalFloating;
+   int count = CountOpenPositions(type, totalFloating);
+   string posText = count == 0 ? "Tidak ada posisi" : (type == OP_BUY ? "BUY" : "SELL") + " x" + IntegerToString(count) + "/" + IntegerToString(MaxPositions);
 
    string text = "";
    text += "=== EMA74/200 + BB20 EA ===\n";
@@ -60,6 +62,7 @@ void ShowPanel()
    text += "TradeMode : " + TradeModeToString() + "\n";
    text += "TF yang dibaca EA, independen dari chart : " + EnumToString(ActiveTimeframe) + "\n";
    text += "LotSize : " + DoubleToString(LotSize, 2) + "\n";
+   text += "MaxPositions : " + IntegerToString(MaxPositions) + "\n";
    text += "Close on opposite signal (jika profit) : " + (CloseOnOppositeSignal ? "true" : "false") + "\n";
    text += "Wajib searah BOS (N=" + IntegerToString(BosLookback) + ") : " + (RequireBOS ? "true" : "false") + "\n";
    text += "Posisi : " + posText;
@@ -200,35 +203,40 @@ double SwingHighSL()
    return swingHigh + 2 * MarketInfo(Symbol(), MODE_SPREAD) * Point;
 }
 
-bool IsFloatingProfit(int ticket)
+// Hitung semua posisi EA ini yang masih terbuka (harusnya selalu searah, karena entry baru
+// selalu mengikuti arah posisi yang sudah ada). type diisi arah posisi (OP_BUY/OP_SELL) kalau count>0.
+int CountOpenPositions(int &type, double &totalFloating)
 {
-   if(!OrderSelect(ticket, SELECT_BY_TICKET))
-      return false;
-   double floating = OrderProfit() + OrderSwap() + OrderCommission();
-   return floating > 0;
-}
+   int count = 0;
+   type = -1;
+   totalFloating = 0.0;
 
-bool HasOpenPosition(int &ticket, int &type)
-{
    for(int i = 0; i < OrdersTotal(); i++)
    {
       if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
       if(OrderSymbol() != Symbol() || OrderMagicNumber() != MagicNumber) continue;
-      if(OrderType() == OP_BUY || OrderType() == OP_SELL)
-      {
-         ticket = OrderTicket();
-         type = OrderType();
-         return true;
-      }
+      if(OrderType() != OP_BUY && OrderType() != OP_SELL) continue;
+
+      count++;
+      type = OrderType();
+      totalFloating += OrderProfit() + OrderSwap() + OrderCommission();
    }
-   return false;
+
+   return count;
 }
 
-void ClosePosition(int ticket, int type)
+void CloseAllPositions(int type)
 {
-   double price = (type == OP_BUY) ? Bid : Ask;
-   if(!OrderClose(ticket, LotSize, price, Slippage, clrYellow))
-      Print("OrderClose gagal, ticket=", ticket, " error=", GetLastError());
+   for(int i = OrdersTotal() - 1; i >= 0; i--)
+   {
+      if(!OrderSelect(i, SELECT_BY_POS, MODE_TRADES)) continue;
+      if(OrderSymbol() != Symbol() || OrderMagicNumber() != MagicNumber) continue;
+      if(OrderType() != type) continue;
+
+      double price = (type == OP_BUY) ? Bid : Ask;
+      if(!OrderClose(OrderTicket(), OrderLots(), price, Slippage, clrYellow))
+         Print("OrderClose gagal, ticket=", OrderTicket(), " error=", GetLastError());
+   }
 }
 
 void OpenBuy()
@@ -269,28 +277,36 @@ void OnTick()
    bool buyEntrySignal  = (TradeMode == BUY_ONLY  || TradeMode == BOTH) && rawBuySignal;
    bool sellEntrySignal = (TradeMode == SELL_ONLY || TradeMode == BOTH) && rawSellSignal;
 
-   int ticket, type;
-   bool hasPosition = HasOpenPosition(ticket, type);
+   int type;
+   double totalFloating;
+   int count = CountOpenPositions(type, totalFloating);
 
-   if(hasPosition)
+   if(count > 0)
    {
-      // Close pakai raw signal, tidak peduli TradeMode
+      // Close pakai raw signal, tidak peduli TradeMode. Floating dihitung dari total semua posisi.
       bool oppositeSignal = (type == OP_BUY && rawSellSignal) || (type == OP_SELL && rawBuySignal);
 
-      if(CloseOnOppositeSignal && oppositeSignal && IsFloatingProfit(ticket))
+      if(CloseOnOppositeSignal && oppositeSignal && totalFloating > 0)
       {
-         ClosePosition(ticket, type);
-         hasPosition = false;
+         CloseAllPositions(type);
+         count = 0;
       }
       else
       {
-         return; // posisi searah, sinyal berlawanan saat floating loss, atau fitur close nonaktif
+         // Sinyal berlawanan saat floating loss, atau fitur close nonaktif -> posisi tetap jalan.
+         // Sinyal SEARAH boleh menambah posisi baru selama belum mencapai MaxPositions.
+         bool sameDirectionSignal = (type == OP_BUY && buyEntrySignal) || (type == OP_SELL && sellEntrySignal);
+         if(sameDirectionSignal && count < MaxPositions)
+         {
+            if(type == OP_BUY) OpenBuy(); else OpenSell();
+         }
+         return;
       }
    }
 
-   if(!hasPosition)
+   if(count == 0)
    {
-      // Entry baru (termasuk reverse setelah close) tetap ikut TradeMode
+      // Posisi pertama (termasuk reverse setelah close) tetap ikut TradeMode
       if(buyEntrySignal)
          OpenBuy();
       else if(sellEntrySignal)
