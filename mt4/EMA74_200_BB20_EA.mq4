@@ -190,14 +190,14 @@ double SwingLowSL()
 {
    int idx = iLowest(NULL, ActiveTimeframe, MODE_LOW, SwingLookback, 1);
    double swingLow = iLow(NULL, ActiveTimeframe, idx);
-   return swingLow - MarketInfo(Symbol(), MODE_SPREAD) * Point;
+   return swingLow - 2 * MarketInfo(Symbol(), MODE_SPREAD) * Point;
 }
 
 double SwingHighSL()
 {
    int idx = iHighest(NULL, ActiveTimeframe, MODE_HIGH, SwingLookback, 1);
    double swingHigh = iHigh(NULL, ActiveTimeframe, idx);
-   return swingHigh + MarketInfo(Symbol(), MODE_SPREAD) * Point;
+   return swingHigh + 2 * MarketInfo(Symbol(), MODE_SPREAD) * Point;
 }
 
 bool IsFloatingProfit(int ticket)
