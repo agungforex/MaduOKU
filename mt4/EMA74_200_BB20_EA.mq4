@@ -95,14 +95,18 @@ double CloseAt(int shift)
    return iClose(NULL, ActiveTimeframe, shift);
 }
 
-// Cari BOS (Break of Structure) terakhir dalam N candle terakhir.
+// Cari BOS (Break of Structure) terakhir dalam N candle terakhir, dikonfirmasi struktur:
+// - Bullish BOS: swing high yang ditembus harus Lower High (< swing high sebelumnya),
+//   DAN swing low sebelum itu harus Lower Low (< swing low sebelumnya).
+// - Bearish BOS: swing low yang ditembus harus Higher Low (> swing low sebelumnya),
+//   DAN swing high sebelum itu harus Higher High (> swing high sebelumnya).
 // Swing high/low pakai fractal 5-bar bawaan MT4 (iFractals), validasi pakai close candle.
 // Return: 1 = BOS bullish terakhir, -1 = BOS bearish terakhir, 0 = tidak ada BOS dalam lookback.
 int GetBOSDirection(int lookback)
 {
-   double swingHigh = -1.0;
-   double swingLow  = -1.0;
-   int    lastBOS    = 0;
+   double sh1 = -1.0, sh2 = -1.0; // swing high terakhir, swing high sebelumnya
+   double sl1 = -1.0, sl2 = -1.0; // swing low terakhir, swing low sebelumnya
+   int    lastBOS = 0;
 
    int scanStart = lookback + 20; // bar tambahan untuk cari swing awal sebelum window lookback dimulai
 
@@ -110,21 +114,25 @@ int GetBOSDirection(int lookback)
    {
       double fh = iFractals(NULL, ActiveTimeframe, MODE_UPPER, s);
       double fl = iFractals(NULL, ActiveTimeframe, MODE_LOWER, s);
-      if(fh != 0.0) swingHigh = fh;
-      if(fl != 0.0) swingLow  = fl;
+      if(fh != 0.0) { sh2 = sh1; sh1 = fh; }
+      if(fl != 0.0) { sl2 = sl1; sl1 = fl; }
 
       if(s <= lookback)
       {
          double closeAtS = iClose(NULL, ActiveTimeframe, s);
-         if(swingHigh > 0 && closeAtS > swingHigh)
+
+         bool bullishStructure = sh1 > 0 && sh2 > 0 && sh1 < sh2 && sl1 > 0 && sl2 > 0 && sl1 < sl2;
+         bool bearishStructure = sl1 > 0 && sl2 > 0 && sl1 > sl2 && sh1 > 0 && sh2 > 0 && sh1 > sh2;
+
+         if(bullishStructure && closeAtS > sh1)
          {
             lastBOS = 1;
-            swingHigh = -1.0; // tunggu fractal baru sebelum BOS bullish berikutnya bisa terdeteksi lagi
+            sh1 = -1.0; // tunggu fractal high baru sebelum BOS bullish berikutnya bisa terdeteksi lagi
          }
-         else if(swingLow > 0 && closeAtS < swingLow)
+         else if(bearishStructure && closeAtS < sl1)
          {
             lastBOS = -1;
-            swingLow = -1.0;
+            sl1 = -1.0;
          }
       }
    }

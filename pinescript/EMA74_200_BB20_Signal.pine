@@ -24,28 +24,37 @@ emaFastDown = emaFast < emaFast[1]
 basisUp = bbBasis > bbBasis[1]
 basisDown = bbBasis < bbBasis[1]
 
-// ---- BOS (Break of Structure): fractal 5-bar (2 kiri, 2 kanan), validasi close, harus fresh dalam N candle ----
+// ---- BOS (Break of Structure) dikonfirmasi struktur, fractal 5-bar (2 kiri, 2 kanan), validasi close ----
+// Bullish BOS: swing high yang ditembus harus Lower High, dan swing low sebelumnya harus Lower Low.
+// Bearish BOS: swing low yang ditembus harus Higher Low, dan swing high sebelumnya harus Higher High.
 pivotHigh = ta.pivothigh(high, 2, 2)
 pivotLow = ta.pivotlow(low, 2, 2)
 
-var float swingHigh = na
-var float swingLow = na
+var float sh1 = na
+var float sh2 = na
+var float sl1 = na
+var float sl2 = na
 var int bosDir = 0
 var int bosBarIndex = na
 
 if not na(pivotHigh)
-    swingHigh := pivotHigh
+    sh2 := sh1
+    sh1 := pivotHigh
 if not na(pivotLow)
-    swingLow := pivotLow
+    sl2 := sl1
+    sl1 := pivotLow
 
-if not na(swingHigh) and close > swingHigh
+bullishStructure = not na(sh1) and not na(sh2) and sh1 < sh2 and not na(sl1) and not na(sl2) and sl1 < sl2
+bearishStructure = not na(sl1) and not na(sl2) and sl1 > sl2 and not na(sh1) and not na(sh2) and sh1 > sh2
+
+if bullishStructure and close > sh1
     bosDir := 1
     bosBarIndex := bar_index
-    swingHigh := na
-if not na(swingLow) and close < swingLow
+    sh1 := na
+if bearishStructure and close < sl1
     bosDir := -1
     bosBarIndex := bar_index
-    swingLow := na
+    sl1 := na
 
 bosFresh = not na(bosBarIndex) and (bar_index - bosBarIndex) <= bosLookback
 bosBullish = not requireBOS or (bosFresh and bosDir == 1)

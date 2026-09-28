@@ -108,15 +108,16 @@ int OnInit()
    return(INIT_SUCCEEDED);
 }
 
-// Cari BOS (Break of Structure) terakhir dalam N candle terakhir, dihitung dari sudut pandang
-// candle "refShift" (0 = candle sekarang, dst). Swing high/low pakai fractal 5-bar, validasi close.
+// Cari BOS (Break of Structure) terakhir dalam N candle terakhir, dikonfirmasi struktur
+// (Lower Low+Lower High untuk bullish, Higher High+Higher Low untuk bearish), dihitung dari
+// sudut pandang candle "refShift" (0 = candle sekarang, dst). Swing pakai fractal 5-bar, validasi close.
 // Return: 1 = BOS bullish terakhir, -1 = BOS bearish terakhir, 0 = tidak ada BOS dalam lookback.
 int GetBOSDirectionAt(const double &high[], const double &low[], const double &close[],
                        int refShift, int lookback, int totalBars)
 {
-   double swingHigh = -1.0;
-   double swingLow  = -1.0;
-   int    lastBOS    = 0;
+   double sh1 = -1.0, sh2 = -1.0;
+   double sl1 = -1.0, sl2 = -1.0;
+   int    lastBOS = 0;
 
    int scanStartRel = lookback + 20;
 
@@ -129,21 +130,25 @@ int GetBOSDirectionAt(const double &high[], const double &low[], const double &c
       bool isFractalHigh = high[idx] > high[idx-1] && high[idx] > high[idx-2] && high[idx] > high[idx+1] && high[idx] > high[idx+2];
       bool isFractalLow  = low[idx]  < low[idx-1]  && low[idx]  < low[idx-2]  && low[idx]  < low[idx+1]  && low[idx]  < low[idx+2];
 
-      if(isFractalHigh) swingHigh = high[idx];
-      if(isFractalLow)  swingLow  = low[idx];
+      if(isFractalHigh) { sh2 = sh1; sh1 = high[idx]; }
+      if(isFractalLow)  { sl2 = sl1; sl1 = low[idx]; }
 
       if(rel <= lookback)
       {
          double c = close[idx];
-         if(swingHigh > 0 && c > swingHigh)
+
+         bool bullishStructure = sh1 > 0 && sh2 > 0 && sh1 < sh2 && sl1 > 0 && sl2 > 0 && sl1 < sl2;
+         bool bearishStructure = sl1 > 0 && sl2 > 0 && sl1 > sl2 && sh1 > 0 && sh2 > 0 && sh1 > sh2;
+
+         if(bullishStructure && c > sh1)
          {
             lastBOS = 1;
-            swingHigh = -1.0;
+            sh1 = -1.0;
          }
-         else if(swingLow > 0 && c < swingLow)
+         else if(bearishStructure && c < sl1)
          {
             lastBOS = -1;
-            swingLow = -1.0;
+            sl1 = -1.0;
          }
       }
    }
