@@ -1,13 +1,13 @@
 #property copyright "MaduOKU"
 #property link      ""
-#property version   "1.00"
+#property version   "2.00"
 #property strict
 #property indicator_chart_window
 #property indicator_buffers 7
 #property indicator_plots   5
 
-#property indicator_color1  clrDodgerBlue   // EMA74
-#property indicator_color2  clrOrangeRed    // EMA200
+#property indicator_color1  clrDodgerBlue   // EMA fast
+#property indicator_color2  clrOrangeRed    // EMA slow
 #property indicator_color3  clrSilver       // BB Upper
 #property indicator_color4  clrSilver       // BB Lower
 #property indicator_width1  2
@@ -19,6 +19,7 @@
 #property indicator_width6  2
 
 //--- Inputs -----------------------------------------------------------
+input ENUM_TIMEFRAMES InpTimeframe = PERIOD_M1;  // Timeframe data yang dibaca (boleh beda dari chart)
 input int    InpEmaFastPeriod   = 74;     // EMA cepat
 input int    InpEmaSlowPeriod   = 200;    // EMA lambat
 input int    InpBBPeriod        = 20;     // Periode Bollinger Bands
@@ -26,6 +27,7 @@ input double InpBBDeviation     = 2.0;    // Deviasi Bollinger Bands
 input int    InpWaitBars        = 5;      // Window (bar) menunggu konfirmasi State3
 input int    InpSLLookback      = 20;     // Jumlah candle untuk cari Low/High terjauh (SL)
 input double InpSpreadMultiplier= 2.0;    // Kelipatan spread ditambahkan ke SL
+input int    InpMaxTfBars       = 3000;   // Batas maksimal candle TF yang diproses (performa)
 input bool   ShowEmaBB          = true;   // Tampilkan EMA & BB di chart
 input bool   ShowSLLines        = true;   // Gambar garis SL saat sinyal muncul
 input bool   EnableAlert        = true;   // Alert popup
@@ -40,10 +42,9 @@ double BBMidBuf[];
 double BuyArrowBuf[];
 double SellArrowBuf[];
 
-//--- State machine (chronological, per direction) -----------------------
-// pending = bar index (shift, 0 = current bar) where State2 terjadi; -1 = tidak ada state pending
-int pendingBuyShift  = -1;
-int pendingSellShift = -1;
+//--- dipakai supaya alert tidak diulang tiap tick pada bar TF yang sama
+datetime lastBuyAlertTfTime  = 0;
+datetime lastSellAlertTfTime = 0;
 
 int OnInit()
   {
@@ -79,29 +80,27 @@ int OnInit()
    SetIndexArrow(6, 234);
    SetIndexLabel(6, "Sell Signal");
 
-   IndicatorShortName("MaduOKU Scalping M1 (EMA" + IntegerToString(InpEmaFastPeriod) +
-                       "/" + IntegerToString(InpEmaSlowPeriod) + ", BB" +
-                       IntegerToString(InpBBPeriod) + "," + DoubleToString(InpBBDeviation, 1) + ")");
+   IndicatorShortName("MaduOKU Scalping (" + EnumToString(InpTimeframe) + ", EMA" +
+                       IntegerToString(InpEmaFastPeriod) + "/" + IntegerToString(InpEmaSlowPeriod) +
+                       ", BB" + IntegerToString(InpBBPeriod) + "," + DoubleToString(InpBBDeviation, 1) + ")");
    return(INIT_SUCCEEDED);
   }
 
 double GetSpreadInPrice()
   {
-   double spreadPoints = MarketInfo(Symbol(), MODE_SPREAD);
-   return(spreadPoints * Point);
+   return(MarketInfo(Symbol(), MODE_SPREAD) * Point);
   }
 
-//--- Lowest Low / Highest High over InpSLLookback bars starting at 'shift'
-double LowestLowFrom(int shift)
+double LowestLowFrom(int tfShift)
   {
-   int idx = iLowest(NULL, 0, MODE_LOW, InpSLLookback, shift);
-   return(idx >= 0 ? Low[idx] : Low[shift]);
+   int idx = iLowest(Symbol(), InpTimeframe, MODE_LOW, InpSLLookback, tfShift);
+   return(idx >= 0 ? iLow(Symbol(), InpTimeframe, idx) : iLow(Symbol(), InpTimeframe, tfShift));
   }
 
-double HighestHighFrom(int shift)
+double HighestHighFrom(int tfShift)
   {
-   int idx = iHighest(NULL, 0, MODE_HIGH, InpSLLookback, shift);
-   return(idx >= 0 ? High[idx] : High[shift]);
+   int idx = iHighest(Symbol(), InpTimeframe, MODE_HIGH, InpSLLookback, tfShift);
+   return(idx >= 0 ? iHigh(Symbol(), InpTimeframe, idx) : iHigh(Symbol(), InpTimeframe, tfShift));
   }
 
 void DrawSLLine(string name, datetime t, double price, color clr)
@@ -128,107 +127,150 @@ int OnCalculate(const int rates_total,
                 const long &volume[],
                 const int &spread[])
   {
-   int minBarsNeeded = MathMax(InpEmaSlowPeriod, MathMax(InpBBPeriod, InpSLLookback)) + InpWaitBars + 5;
-   if(rates_total < minBarsNeeded)
+   int minTfBarsNeeded = MathMax(InpEmaSlowPeriod, MathMax(InpBBPeriod, InpSLLookback)) + InpWaitBars + 5;
+
+   int tfTotal = iBars(Symbol(), InpTimeframe);
+   if(tfTotal < minTfBarsNeeded)
+      return(0); // data TF yang diminta belum cukup / belum ter-load
+
+   int tfProcessCount = MathMin(tfTotal - minTfBarsNeeded, InpMaxTfBars);
+   if(tfProcessCount < 1)
       return(0);
 
-   int limit = rates_total - prev_calculated;
-   if(prev_calculated == 0)
-     {
-      limit = rates_total - minBarsNeeded;
-      pendingBuyShift  = -1;
-      pendingSellShift = -1;
-     }
-   if(limit > rates_total - minBarsNeeded)
-      limit = rates_total - minBarsNeeded;
-   if(limit < 1)
-      limit = 1;
+   //--- 1) Hitung state machine di timeframe target (InpTimeframe), simpan hasil per tf-bar
+   int    tfType[];   // 1 = sinyal BUY, -1 = sinyal SELL, 0 = tidak ada
+   double tfSL[];
+   ArrayResize(tfType, tfProcessCount + 1);
+   ArrayResize(tfSL,   tfProcessCount + 1);
+   ArrayInitialize(tfType, 0);
+   ArrayInitialize(tfSL, 0.0);
 
    double spreadPrice = GetSpreadInPrice();
+   int pendingBuyTf  = -1;
+   int pendingSellTf = -1;
 
-   // Iterasi dari bar terlama ke terbaru (shift besar -> shift kecil) agar state machine berjalan kronologis
-   for(int shift = limit; shift >= 0; shift--)
+   for(int tf = tfProcessCount; tf >= 0; tf--)
      {
-      int i = shift; // index array timeseries, 0 = bar terbaru
+      double o = iOpen(Symbol(), InpTimeframe, tf);
+      double c = iClose(Symbol(), InpTimeframe, tf);
 
-      double emaFast = iMA(NULL, 0, InpEmaFastPeriod, 0, MODE_EMA, PRICE_CLOSE, i);
-      double emaSlow = iMA(NULL, 0, InpEmaSlowPeriod, 0, MODE_EMA, PRICE_CLOSE, i);
-      double bbUpper = iBands(NULL, 0, InpBBPeriod, InpBBDeviation, 0, PRICE_CLOSE, MODE_UPPER, i);
-      double bbLower = iBands(NULL, 0, InpBBPeriod, InpBBDeviation, 0, PRICE_CLOSE, MODE_LOWER, i);
-      double bbMid   = iBands(NULL, 0, InpBBPeriod, InpBBDeviation, 0, PRICE_CLOSE, MODE_MAIN, i);
+      double emaFast = iMA(Symbol(), InpTimeframe, InpEmaFastPeriod, 0, MODE_EMA, PRICE_CLOSE, tf);
+      double emaSlow = iMA(Symbol(), InpTimeframe, InpEmaSlowPeriod, 0, MODE_EMA, PRICE_CLOSE, tf);
+      double bbUpper = iBands(Symbol(), InpTimeframe, InpBBPeriod, InpBBDeviation, 0, PRICE_CLOSE, MODE_UPPER, tf);
+      double bbLower = iBands(Symbol(), InpTimeframe, InpBBPeriod, InpBBDeviation, 0, PRICE_CLOSE, MODE_LOWER, tf);
 
-      EmaFastBuf[i] = emaFast;
-      EmaSlowBuf[i] = emaSlow;
-      BBUpperBuf[i] = bbUpper;
-      BBLowerBuf[i] = bbLower;
-      BBMidBuf[i]   = bbMid;
-      BuyArrowBuf[i]  = EMPTY_VALUE;
-      SellArrowBuf[i] = EMPTY_VALUE;
-
-      bool trendUp   = emaFast > emaSlow;   // State 1 - BUY bias
-      bool trendDown = emaFast < emaSlow;   // State 1 - SELL bias
-
-      bool bearishCandle = close[i] < open[i];
-      bool bullishCandle = close[i] > open[i];
+      bool trendUp   = emaFast > emaSlow;
+      bool trendDown = emaFast < emaSlow;
+      bool bearishCandle = c < o;
+      bool bullishCandle = c > o;
 
       //================= BUY SIDE =================
-      if(trendUp && bearishCandle && close[i] < bbLower)
+      if(trendUp && bearishCandle && c < bbLower)
         {
-         // State 2 baru terjadi -> (re)set window tunggu
-         pendingBuyShift = i;
+         pendingBuyTf = tf;
         }
-      else if(pendingBuyShift >= 0)
+      else if(pendingBuyTf >= 0)
         {
-         int barsElapsed = pendingBuyShift - i; // berapa bar sudah lewat sejak State2
+         int barsElapsed = pendingBuyTf - tf;
          if(barsElapsed > InpWaitBars)
            {
-            pendingBuyShift = -1; // window habis, invalid
+            pendingBuyTf = -1;
            }
-         else if(trendUp && bullishCandle && close[i] > bbLower)
+         else if(trendUp && bullishCandle && c > bbLower)
            {
-            // State 3 - Sinyal BUY
-            BuyArrowBuf[i] = Low[i] - 3 * Point;
-            double sl = LowestLowFrom(i) - InpSpreadMultiplier * spreadPrice;
-            DrawSLLine("MaduOKU_SL_BUY_" + TimeToString(time[i]), time[i], sl, clrLime);
-
-            if(i == 0) // hanya alert untuk bar yang baru terbentuk/berjalan
-              {
-               string msg = StringFormat("%s M1 BUY signal @ %s | SL=%s", Symbol(), DoubleToString(Close[0], Digits), DoubleToString(sl, Digits));
-               if(EnableAlert) Alert(msg);
-               if(EnablePushNotify) SendNotification(msg);
-              }
-            pendingBuyShift = -1;
+            tfType[tf] = 1;
+            tfSL[tf]   = LowestLowFrom(tf) - InpSpreadMultiplier * spreadPrice;
+            pendingBuyTf = -1;
            }
         }
 
       //================= SELL SIDE =================
-      if(trendDown && bullishCandle && close[i] > bbUpper)
+      if(trendDown && bullishCandle && c > bbUpper)
         {
-         // State 2 baru terjadi -> (re)set window tunggu
-         pendingSellShift = i;
+         pendingSellTf = tf;
         }
-      else if(pendingSellShift >= 0)
+      else if(pendingSellTf >= 0)
         {
-         int barsElapsed = pendingSellShift - i;
+         int barsElapsed = pendingSellTf - tf;
          if(barsElapsed > InpWaitBars)
            {
-            pendingSellShift = -1;
+            pendingSellTf = -1;
            }
-         else if(trendDown && bearishCandle && close[i] < bbUpper)
+         else if(trendDown && bearishCandle && c < bbUpper)
            {
-            // State 3 - Sinyal SELL
-            SellArrowBuf[i] = High[i] + 3 * Point;
-            double sl = HighestHighFrom(i) + InpSpreadMultiplier * spreadPrice;
-            DrawSLLine("MaduOKU_SL_SELL_" + TimeToString(time[i]), time[i], sl, clrRed);
-
-            if(i == 0)
-              {
-               string msg = StringFormat("%s M1 SELL signal @ %s | SL=%s", Symbol(), DoubleToString(Close[0], Digits), DoubleToString(sl, Digits));
-               if(EnableAlert) Alert(msg);
-               if(EnablePushNotify) SendNotification(msg);
-              }
-            pendingSellShift = -1;
+            tfType[tf] = -1;
+            tfSL[tf]   = HighestHighFrom(tf) + InpSpreadMultiplier * spreadPrice;
+            pendingSellTf = -1;
            }
+        }
+     }
+
+   //--- alert hanya untuk tf-bar terbaru (tf==0), sekali per tf-bar
+   if(tfType[0] == 1 && lastBuyAlertTfTime != iTime(Symbol(), InpTimeframe, 0))
+     {
+      lastBuyAlertTfTime = iTime(Symbol(), InpTimeframe, 0);
+      string msg = StringFormat("%s %s BUY signal @ %s | SL=%s", Symbol(), EnumToString(InpTimeframe),
+                                 DoubleToString(iClose(Symbol(), InpTimeframe, 0), Digits), DoubleToString(tfSL[0], Digits));
+      if(EnableAlert) Alert(msg);
+      if(EnablePushNotify) SendNotification(msg);
+     }
+   if(tfType[0] == -1 && lastSellAlertTfTime != iTime(Symbol(), InpTimeframe, 0))
+     {
+      lastSellAlertTfTime = iTime(Symbol(), InpTimeframe, 0);
+      string msg = StringFormat("%s %s SELL signal @ %s | SL=%s", Symbol(), EnumToString(InpTimeframe),
+                                 DoubleToString(iClose(Symbol(), InpTimeframe, 0), Digits), DoubleToString(tfSL[0], Digits));
+      if(EnableAlert) Alert(msg);
+      if(EnablePushNotify) SendNotification(msg);
+     }
+
+   //--- 2) Petakan hasil timeframe target ke bar-bar chart saat ini (mendukung chart TF berbeda dari InpTimeframe)
+   int limit = rates_total - prev_calculated;
+   if(prev_calculated == 0)
+      limit = rates_total - 1;
+   if(limit >= rates_total)
+      limit = rates_total - 1;
+   if(limit < 0)
+      limit = 0;
+
+   int prevTfShift = -999;
+   for(int i = limit; i >= 0; i--)
+     {
+      int tfShift = iBarShift(Symbol(), InpTimeframe, time[i], false);
+      if(tfShift < 0 || tfShift > tfProcessCount)
+        {
+         EmaFastBuf[i] = EMPTY_VALUE;
+         EmaSlowBuf[i] = EMPTY_VALUE;
+         BBUpperBuf[i] = EMPTY_VALUE;
+         BBLowerBuf[i] = EMPTY_VALUE;
+         BBMidBuf[i]   = EMPTY_VALUE;
+         BuyArrowBuf[i]  = EMPTY_VALUE;
+         SellArrowBuf[i] = EMPTY_VALUE;
+         continue;
+        }
+
+      EmaFastBuf[i] = iMA(Symbol(), InpTimeframe, InpEmaFastPeriod, 0, MODE_EMA, PRICE_CLOSE, tfShift);
+      EmaSlowBuf[i] = iMA(Symbol(), InpTimeframe, InpEmaSlowPeriod, 0, MODE_EMA, PRICE_CLOSE, tfShift);
+      BBUpperBuf[i] = iBands(Symbol(), InpTimeframe, InpBBPeriod, InpBBDeviation, 0, PRICE_CLOSE, MODE_UPPER, tfShift);
+      BBLowerBuf[i] = iBands(Symbol(), InpTimeframe, InpBBPeriod, InpBBDeviation, 0, PRICE_CLOSE, MODE_LOWER, tfShift);
+      BBMidBuf[i]   = iBands(Symbol(), InpTimeframe, InpBBPeriod, InpBBDeviation, 0, PRICE_CLOSE, MODE_MAIN,  tfShift);
+      BuyArrowBuf[i]  = EMPTY_VALUE;
+      SellArrowBuf[i] = EMPTY_VALUE;
+
+      // Anchor bar = bar chart pertama (dari lama ke baru) yang mewakili tf-bar ini -> tempat gambar panah
+      bool isAnchor = (tfShift != prevTfShift);
+      prevTfShift = tfShift;
+
+      if(isAnchor && tfType[tfShift] == 1)
+        {
+         BuyArrowBuf[i] = low[i] - 3 * Point;
+         DrawSLLine("MaduOKU_SL_BUY_" + TimeToString(iTime(Symbol(), InpTimeframe, tfShift)),
+                    time[i], tfSL[tfShift], clrLime);
+        }
+      else if(isAnchor && tfType[tfShift] == -1)
+        {
+         SellArrowBuf[i] = high[i] + 3 * Point;
+         DrawSLLine("MaduOKU_SL_SELL_" + TimeToString(iTime(Symbol(), InpTimeframe, tfShift)),
+                    time[i], tfSL[tfShift], clrRed);
         }
      }
 

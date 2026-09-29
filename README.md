@@ -31,6 +31,7 @@ Level SL digambar otomatis sebagai garis horizontal putus-putus di chart saat si
 
 | Input | Default | Keterangan |
 |---|---|---|
+| InpTimeframe | PERIOD_M1 | Timeframe data yang dibaca indikator (boleh beda dari timeframe chart tempat indikator dipasang) |
 | InpEmaFastPeriod | 74 | Periode EMA cepat |
 | InpEmaSlowPeriod | 200 | Periode EMA lambat |
 | InpBBPeriod | 20 | Periode Bollinger Bands |
@@ -38,6 +39,7 @@ Level SL digambar otomatis sebagai garis horizontal putus-putus di chart saat si
 | InpWaitBars | 5 | Window candle menunggu konfirmasi State3 |
 | InpSLLookback | 20 | Jumlah candle untuk hitung Low/High terjauh (SL) |
 | InpSpreadMultiplier | 2.0 | Kelipatan spread ditambahkan sebagai buffer SL |
+| InpMaxTfBars | 3000 | Batas maksimal candle timeframe target yang diproses (performa) |
 | ShowEmaBB | true | Tampilkan garis EMA & BB |
 | ShowSLLines | true | Gambar garis SL saat sinyal muncul |
 | EnableAlert | true | Alert popup MT4 saat sinyal baru |
@@ -46,4 +48,5 @@ Level SL digambar otomatis sebagai garis horizontal putus-putus di chart saat si
 ### Instalasi
 
 1. Copy `MaduOKU_Scalping_M1.mq4` ke folder `MQL4/Indicators/` pada data folder terminal MT4.
-2. Restart MT4 atau refresh Navigator, lalu drag indikator ke chart timeframe M1.
+2. Restart MT4 atau refresh Navigator, lalu drag indikator ke chart.
+3. Indikator membaca data sesuai `InpTimeframe` (default M1), terlepas dari timeframe chart tempat ia dipasang. Untuk penggunaan normal, tetap disarankan pasang di chart M1 dengan `InpTimeframe = PERIOD_M1`.
