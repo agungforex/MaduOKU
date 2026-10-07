@@ -1,0 +1,183 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// Converted from HermesRejectChoch.mq4
+//@version=5
+indicator("HermesRejectChoch", overlay = true, max_labels_count = 500, max_lines_count = 50)
+
+// ================= Rejection =================
+grp1          = "Rejection"
+wickBodyRatio = input.float(2.0,  "Wick >= N x Body",            group = grp1)
+wickRangePct  = input.float(40.0, "Wick >= % of candle range",    group = grp1)
+minWickPts    = input.float(1.5,  "Minimum wick size (price)",    group = grp1)
+closePosPct   = input.float(34.0, "Close within last % of range", group = grp1)
+
+// ================= Zones (0 = any level) =================
+grp2     = "Zones (0,0 = any level)"
+supplyLo = input.float(0.0, "Supply zone low (SELL)",  group = grp2)
+supplyHi = input.float(0.0, "Supply zone high",         group = grp2)
+demandLo = input.float(0.0, "Demand zone low (BUY)",    group = grp2)
+demandHi = input.float(0.0, "Demand zone high",          group = grp2)
+zonePad  = input.float(3.0, "Zone tolerance",            group = grp2)
+
+// ================= CHoCH =================
+grp3          = "CHoCH"
+pivotSide     = input.int(2,  "Pivot side (bars left/right)", minval = 1, group = grp3)
+swingLookback = input.int(18, "Max age of swing/pivot (bars)", minval = 1, group = grp3)
+showRejection = input.bool(true, "Show Rejection", group = grp3)
+showChoch     = input.bool(true, "Show CHoCH",     group = grp3)
+
+// ================= EMA & Bollinger =================
+grp4       = "EMA & Bollinger"
+showEMA    = input.bool(true, "Show EMA",        group = grp4)
+ema1Period = input.int(74,  "EMA 1 period",      group = grp4)
+ema2Period = input.int(200, "EMA 2 period",       group = grp4)
+showBB     = input.bool(true, "Show Bollinger",  group = grp4)
+bbPeriod   = input.int(20,  "BB period",          group = grp4)
+bbDev      = input.float(2.0, "BB deviation",     group = grp4)
+
+// ================= Trend filter =================
+grp5        = "Trend filter"
+filterModeStr = input.string("Either (OR)", "Filter mode (rejection)",
+     options = ["Off", "EMA74 vs EMA200", "Close vs EMA74", "Either (OR)"], group = grp5)
+filterChoch   = input.bool(false, "Apply same filter to CHoCH", group = grp5)
+
+// ================= Helpers =================
+f_inZone(lo, hi, px) =>
+    (lo == 0 and hi == 0) ? true : (px >= lo - zonePad and px <= hi + zonePad)
+
+// ================= EMA / Bollinger =================
+ema1 = ta.ema(close, ema1Period)
+ema2 = ta.ema(close, ema2Period)
+bbBasis = ta.sma(close, bbPeriod)
+bbDevVal = bbDev * ta.stdev(close, bbPeriod)
+bbUpper = bbBasis + bbDevVal
+bbLower = bbBasis - bbDevVal
+
+plot(showEMA ? ema1 : na, "EMA " + str.tostring(ema1Period), color = color.new(color.blue, 0),   linewidth = 2)
+plot(showEMA ? ema2 : na, "EMA " + str.tostring(ema2Period), color = color.new(color.orange, 0), linewidth = 2)
+plot(showBB ? bbUpper : na, "BB Upper", color = color.new(color.silver, 0))
+plot(showBB ? bbBasis : na, "BB Mid",   color = color.new(color.gray, 0), style = plot.style_circles)
+plot(showBB ? bbLower : na, "BB Lower", color = color.new(color.silver, 0))
+
+// ================= Trend filter =================
+condA_sell = ema1 < ema2          // EMA74 vs EMA200
+condA_buy  = ema1 > ema2
+condB_sell = close < ema1         // Close vs EMA74
+condB_buy  = close > ema1
+
+sellOK = switch filterModeStr
+    "Off"               => true
+    "EMA74 vs EMA200"   => condA_sell
+    "Close vs EMA74"    => condB_sell
+    "Either (OR)"       => condA_sell or condB_sell
+    => true
+
+buyOK = switch filterModeStr
+    "Off"               => true
+    "EMA74 vs EMA200"   => condA_buy
+    "Close vs EMA74"    => condB_buy
+    "Either (OR)"       => condA_buy or condB_buy
+    => true
+
+// ================= Rejection (evaluated on closed candle) =================
+rng  = high - low
+body = math.abs(close - open)
+upWick = high - math.max(open, close)
+dnWick = math.min(open, close) - low
+
+rejSellCond = showRejection and sellOK and rng > 0 and
+     upWick >= wickBodyRatio * body and
+     upWick >= wickRangePct / 100.0 * rng and
+     upWick >= minWickPts and
+     (close - low) / rng <= closePosPct / 100.0 and
+     f_inZone(supplyLo, supplyHi, high)
+
+rejBuyCond = showRejection and buyOK and rng > 0 and
+     dnWick >= wickBodyRatio * body and
+     dnWick >= wickRangePct / 100.0 * rng and
+     dnWick >= minWickPts and
+     (high - close) / rng <= closePosPct / 100.0 and
+     f_inZone(demandLo, demandHi, low)
+
+rejSell = barstate.isconfirmed and rejSellCond
+rejBuy  = barstate.isconfirmed and rejBuyCond
+
+plotshape(rejSell, title = "Rejection SELL", style = shape.triangledown, location = location.abovebar,
+     color = color.new(color.red, 0), size = size.tiny, text = "")
+plotshape(rejBuy,  title = "Rejection BUY",  style = shape.triangleup,   location = location.belowbar,
+     color = color.new(color.blue, 0), size = size.tiny, text = "")
+
+// ================= CHoCH (structural break) =================
+// Bearish chain: swing high (peak) -> first pivot low after it -> close breaks below that pivot low
+// Bullish chain: swing low (trough) -> first pivot high after it -> close breaks above that pivot high
+var float lastPeakVal     = na
+var int   lastPeakBar     = na
+var float pendingLowVal   = na
+var int   pendingLowBar   = na
+var bool  brokenDown      = true
+
+var float lastTroughVal   = na
+var int   lastTroughBar   = na
+var float pendingHighVal  = na
+var int   pendingHighBar  = na
+var bool  brokenUp        = true
+
+phVal = ta.pivothigh(pivotSide, pivotSide)
+plVal = ta.pivotlow(pivotSide, pivotSide)
+
+if not na(phVal)
+    phBar = bar_index - pivotSide
+    // new swing high -> restart the bearish search for a pivot low after it
+    lastPeakVal := phVal
+    lastPeakBar := phBar
+    pendingLowVal := na
+    pendingLowBar := na
+    brokenDown := false
+    // first pivot high after an existing trough feeds the bullish chain
+    if not na(lastTroughBar) and na(pendingHighVal) and phBar > lastTroughBar
+        pendingHighVal := phVal
+        pendingHighBar := phBar
+
+if not na(plVal)
+    plBar = bar_index - pivotSide
+    // new swing low -> restart the bullish search for a pivot high after it
+    lastTroughVal := plVal
+    lastTroughBar := plBar
+    pendingHighVal := na
+    pendingHighBar := na
+    brokenUp := false
+    // first pivot low after an existing peak feeds the bearish chain
+    if not na(lastPeakBar) and na(pendingLowVal) and plBar > lastPeakBar
+        pendingLowVal := plVal
+        pendingLowBar := plBar
+
+// invalidate stale, unconfirmed chains older than swingLookback
+if not na(lastPeakBar) and na(pendingLowVal) and (bar_index - lastPeakBar) > swingLookback
+    lastPeakVal := na
+    lastPeakBar := na
+if not na(lastTroughBar) and na(pendingHighVal) and (bar_index - lastTroughBar) > swingLookback
+    lastTroughVal := na
+    lastTroughBar := na
+
+chochSellCond = showChoch and not brokenDown and not na(pendingLowVal) and close < pendingLowVal and
+     f_inZone(supplyLo, supplyHi, lastPeakVal) and (not filterChoch or sellOK)
+chochBuyCond = showChoch and not brokenUp and not na(pendingHighVal) and close > pendingHighVal and
+     f_inZone(demandLo, demandHi, lastTroughVal) and (not filterChoch or buyOK)
+
+chochSell = barstate.isconfirmed and chochSellCond
+chochBuy  = barstate.isconfirmed and chochBuyCond
+
+if chochSell
+    brokenDown := true
+if chochBuy
+    brokenUp := true
+
+plotshape(chochSell, title = "CHoCH SELL", style = shape.labeldown, location = location.abovebar,
+     color = color.new(color.red, 0), textcolor = color.white, size = size.small, text = "CHoCH")
+plotshape(chochBuy,  title = "CHoCH BUY",  style = shape.labelup,   location = location.belowbar,
+     color = color.new(color.blue, 0), textcolor = color.white, size = size.small, text = "CHoCH")
+
+// ================= Alerts =================
+alertcondition(rejSell,   title = "Rejection SELL", message = "{{ticker}} {{interval}} Rejection SELL")
+alertcondition(rejBuy,    title = "Rejection BUY",  message = "{{ticker}} {{interval}} Rejection BUY")
+alertcondition(chochSell, title = "CHoCH SELL",     message = "{{ticker}} {{interval}} CHoCH SELL")
+alertcondition(chochBuy,  title = "CHoCH BUY",      message = "{{ticker}} {{interval}} CHoCH BUY")
