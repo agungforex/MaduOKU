@@ -91,11 +91,14 @@ p2 = plot(bbLower, "BB Lower", color=color.new(color.gray, 40))
 fill(p1, p2, color=color.new(color.gray, 90))
 plot(bbBasis, "BB Basis", color=color.new(color.gray, 20))
 
-plotshape(buySignal1, title="Buy Signal 1", location=location.belowbar, style=shape.triangleup, color=color.green, size=size.small)
+plot(sma5Low, "SMA 5 Low", color=color.new(color.blue, 30), linewidth=1)
+plot(sma5High, "SMA 5 High", color=color.new(color.red, 30), linewidth=1)
+
+plotshape(buySignal1, title="Buy Signal 1", location=location.belowbar, style=shape.triangleup, color=color.blue, size=size.small)
 plotshape(sellSignal1, title="Sell Signal 1", location=location.abovebar, style=shape.triangledown, color=color.red, size=size.small)
 
-plotshape(buySignal2, title="Buy Signal 2", location=location.belowbar, style=shape.circle, color=color.lime, size=size.tiny)
-plotshape(sellSignal2, title="Sell Signal 2", location=location.abovebar, style=shape.circle, color=color.maroon, size=size.tiny)
+plotshape(buySignal2, title="Buy Signal 2", location=location.belowbar, style=shape.circle, color=color.blue, size=size.tiny)
+plotshape(sellSignal2, title="Sell Signal 2", location=location.abovebar, style=shape.circle, color=color.red, size=size.tiny)
 
-plotshape(buySignal3, title="Buy Signal 3", location=location.belowbar, style=shape.xcross, color=color.aqua, size=size.tiny)
-plotshape(sellSignal3, title="Sell Signal 3", location=location.abovebar, style=shape.xcross, color=color.fuchsia, size=size.tiny)
+plotshape(buySignal3, title="Buy Signal 3", location=location.belowbar, style=shape.xcross, color=color.blue, size=size.tiny)
+plotshape(sellSignal3, title="Sell Signal 3", location=location.abovebar, style=shape.xcross, color=color.red, size=size.tiny)

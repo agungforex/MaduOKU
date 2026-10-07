@@ -2,8 +2,8 @@
 #property strict
 #property indicator_chart_window
 
-#property indicator_buffers 11
-#property indicator_plots   11
+#property indicator_buffers 13
+#property indicator_plots   13
 
 #property indicator_type1   DRAW_LINE
 #property indicator_color1  clrOrange
@@ -29,7 +29,7 @@
 #property indicator_label5  "BB Basis"
 
 #property indicator_type6   DRAW_ARROW
-#property indicator_color6  clrLime
+#property indicator_color6  clrBlue
 #property indicator_width6  2
 #property indicator_label6  "Buy Signal 1"
 
@@ -39,24 +39,32 @@
 #property indicator_label7  "Sell Signal 1"
 
 #property indicator_type8   DRAW_ARROW
-#property indicator_color8  clrLimeGreen
+#property indicator_color8  clrBlue
 #property indicator_width8  1
 #property indicator_label8  "Buy Signal 2"
 
 #property indicator_type9   DRAW_ARROW
-#property indicator_color9  clrMaroon
+#property indicator_color9  clrRed
 #property indicator_width9  1
 #property indicator_label9  "Sell Signal 2"
 
 #property indicator_type10  DRAW_ARROW
-#property indicator_color10 clrAqua
+#property indicator_color10 clrBlue
 #property indicator_width10 1
 #property indicator_label10 "Buy Signal 3"
 
 #property indicator_type11  DRAW_ARROW
-#property indicator_color11 clrFuchsia
+#property indicator_color11 clrRed
 #property indicator_width11 1
 #property indicator_label11 "Sell Signal 3"
+
+#property indicator_type12  DRAW_LINE
+#property indicator_color12 clrBlue
+#property indicator_label12 "SMA 5 Low"
+
+#property indicator_type13  DRAW_LINE
+#property indicator_color13 clrRed
+#property indicator_label13 "SMA 5 High"
 
 input int    EmaFastPeriod = 74;
 input int    EmaSlowPeriod = 200;
@@ -80,6 +88,8 @@ double BuySignal2Buffer[];
 double SellSignal2Buffer[];
 double BuySignal3Buffer[];
 double SellSignal3Buffer[];
+double Sma5LowBuffer[];
+double Sma5HighBuffer[];
 
 datetime lastBuy1AlertTime  = 0;
 datetime lastSell1AlertTime = 0;
@@ -101,6 +111,8 @@ int OnInit()
    SetIndexBuffer(8, SellSignal2Buffer);
    SetIndexBuffer(9, BuySignal3Buffer);
    SetIndexBuffer(10, SellSignal3Buffer);
+   SetIndexBuffer(11, Sma5LowBuffer);
+   SetIndexBuffer(12, Sma5HighBuffer);
 
    ArraySetAsSeries(EmaFastBuffer, true);
    ArraySetAsSeries(EmaSlowBuffer, true);
@@ -113,6 +125,8 @@ int OnInit()
    ArraySetAsSeries(SellSignal2Buffer, true);
    ArraySetAsSeries(BuySignal3Buffer, true);
    ArraySetAsSeries(SellSignal3Buffer, true);
+   ArraySetAsSeries(Sma5LowBuffer, true);
+   ArraySetAsSeries(Sma5HighBuffer, true);
 
    SetIndexArrow(5, 233); // Signal 1 panah atas
    SetIndexArrow(6, 234); // Signal 1 panah bawah
@@ -213,6 +227,8 @@ int OnCalculate(const int rates_total,
       BBUpperBuffer[i] = iBands(NULL, 0, BBPeriod, BBDeviation, 0, PRICE_CLOSE, MODE_UPPER, i);
       BBLowerBuffer[i] = iBands(NULL, 0, BBPeriod, BBDeviation, 0, PRICE_CLOSE, MODE_LOWER, i);
       BBBasisBuffer[i] = iBands(NULL, 0, BBPeriod, BBDeviation, 0, PRICE_CLOSE, MODE_MAIN, i);
+      Sma5LowBuffer[i]  = iMA(NULL, 0, Sma5Period, 0, MODE_SMA, PRICE_LOW, i);
+      Sma5HighBuffer[i] = iMA(NULL, 0, Sma5Period, 0, MODE_SMA, PRICE_HIGH, i);
 
       BuySignal1Buffer[i]  = EMPTY_VALUE;
       SellSignal1Buffer[i] = EMPTY_VALUE;
@@ -262,13 +278,11 @@ int OnCalculate(const int rates_total,
          SellSignal2Buffer[i] = high[i] + gap;
 
       // Signal 3: ekstrim SMA5(low/high) menembus BB20, murni mean-reversion (tanpa filter EMA74/BOS)
-      double sma5LowNow   = iMA(NULL, 0, Sma5Period, 0, MODE_SMA, PRICE_LOW, i);
       double sma5LowPrev  = iMA(NULL, 0, Sma5Period, 0, MODE_SMA, PRICE_LOW, i + 1);
-      double sma5HighNow  = iMA(NULL, 0, Sma5Period, 0, MODE_SMA, PRICE_HIGH, i);
       double sma5HighPrev = iMA(NULL, 0, Sma5Period, 0, MODE_SMA, PRICE_HIGH, i + 1);
 
-      bool crossUnderLower = sma5LowNow < BBLowerBuffer[i] && sma5LowPrev >= BBLowerBuffer[i + 1];
-      bool crossOverUpper  = sma5HighNow > BBUpperBuffer[i] && sma5HighPrev <= BBUpperBuffer[i + 1];
+      bool crossUnderLower = Sma5LowBuffer[i] < BBLowerBuffer[i] && sma5LowPrev >= BBLowerBuffer[i + 1];
+      bool crossOverUpper  = Sma5HighBuffer[i] > BBUpperBuffer[i] && sma5HighPrev <= BBUpperBuffer[i + 1];
 
       if(crossUnderLower)
          BuySignal3Buffer[i] = low[i] - gap;
