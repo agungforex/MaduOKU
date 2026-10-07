@@ -10,6 +10,8 @@ bbMult = input.float(2.0, "BB StdDev Multiplier (k)", step=0.1)
 requireBOS = input.bool(true, "Signal valid hanya jika searah BOS terakhir", group="BOS Filter")
 bosLookback = input.int(50, "BOS harus terjadi dalam N candle terakhir", group="BOS Filter")
 
+sma5Len = input.int(5, "SMA Length (Signal 3)", group="Signal 3 - Extreme")
+
 // ---- Core series ----
 // EMA: EMA_t = alpha*Close_t + (1-alpha)*EMA_t-1, alpha = 2/(len+1)
 emaFast = ta.ema(close, emaFastLen)
@@ -74,6 +76,13 @@ crossBasisDown = ta.crossunder(close, bbBasis)
 buySignal2 = crossBasisUp and (basisUp or emaFastUp) and bosBullish
 sellSignal2 = crossBasisDown and (basisDown or emaFastDown) and bosBearish
 
+// ---- Signal 3: ekstrim SMA5(low/high) menembus BB20, murni mean-reversion (tanpa filter EMA74/BOS) ----
+sma5Low = ta.sma(low, sma5Len)
+sma5High = ta.sma(high, sma5Len)
+
+buySignal3 = ta.crossunder(sma5Low, bbLower)
+sellSignal3 = ta.crossover(sma5High, bbUpper)
+
 // ---- Plots ----
 plot(emaFast, "EMA 74", color=color.orange, linewidth=2)
 plot(emaSlow, "EMA 200", color=color.blue, linewidth=2)
@@ -87,3 +96,6 @@ plotshape(sellSignal1, title="Sell Signal 1", location=location.abovebar, style=
 
 plotshape(buySignal2, title="Buy Signal 2", location=location.belowbar, style=shape.circle, color=color.lime, size=size.tiny)
 plotshape(sellSignal2, title="Sell Signal 2", location=location.abovebar, style=shape.circle, color=color.maroon, size=size.tiny)
+
+plotshape(buySignal3, title="Buy Signal 3", location=location.belowbar, style=shape.xcross, color=color.aqua, size=size.tiny)
+plotshape(sellSignal3, title="Sell Signal 3", location=location.abovebar, style=shape.xcross, color=color.fuchsia, size=size.tiny)

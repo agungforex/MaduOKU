@@ -2,8 +2,8 @@
 #property strict
 #property indicator_chart_window
 
-#property indicator_buffers 9
-#property indicator_plots   9
+#property indicator_buffers 11
+#property indicator_plots   11
 
 #property indicator_type1   DRAW_LINE
 #property indicator_color1  clrOrange
@@ -48,12 +48,23 @@
 #property indicator_width9  1
 #property indicator_label9  "Sell Signal 2"
 
+#property indicator_type10  DRAW_ARROW
+#property indicator_color10 clrAqua
+#property indicator_width10 1
+#property indicator_label10 "Buy Signal 3"
+
+#property indicator_type11  DRAW_ARROW
+#property indicator_color11 clrFuchsia
+#property indicator_width11 1
+#property indicator_label11 "Sell Signal 3"
+
 input int    EmaFastPeriod = 74;
 input int    EmaSlowPeriod = 200;
 input int    BBPeriod      = 20;
 input double BBDeviation   = 2.0;
 input bool   RequireBOS    = true;  // Signal valid hanya jika searah BOS terakhir
 input int    BosLookback   = 50;    // BOS harus terjadi dalam N candle terakhir
+input int    Sma5Period    = 5;     // Periode SMA untuk Signal 3 (ekstrim)
 input int    ArrowGapPoints = 10;
 input bool   EnableAlerts  = true;
 input bool   EnablePushNotification = false;
@@ -67,11 +78,15 @@ double BuySignal1Buffer[];
 double SellSignal1Buffer[];
 double BuySignal2Buffer[];
 double SellSignal2Buffer[];
+double BuySignal3Buffer[];
+double SellSignal3Buffer[];
 
 datetime lastBuy1AlertTime  = 0;
 datetime lastSell1AlertTime = 0;
 datetime lastBuy2AlertTime  = 0;
 datetime lastSell2AlertTime = 0;
+datetime lastBuy3AlertTime  = 0;
+datetime lastSell3AlertTime = 0;
 
 int OnInit()
 {
@@ -84,6 +99,8 @@ int OnInit()
    SetIndexBuffer(6, SellSignal1Buffer);
    SetIndexBuffer(7, BuySignal2Buffer);
    SetIndexBuffer(8, SellSignal2Buffer);
+   SetIndexBuffer(9, BuySignal3Buffer);
+   SetIndexBuffer(10, SellSignal3Buffer);
 
    ArraySetAsSeries(EmaFastBuffer, true);
    ArraySetAsSeries(EmaSlowBuffer, true);
@@ -94,15 +111,21 @@ int OnInit()
    ArraySetAsSeries(SellSignal1Buffer, true);
    ArraySetAsSeries(BuySignal2Buffer, true);
    ArraySetAsSeries(SellSignal2Buffer, true);
+   ArraySetAsSeries(BuySignal3Buffer, true);
+   ArraySetAsSeries(SellSignal3Buffer, true);
 
    SetIndexArrow(5, 233); // Signal 1 panah atas
    SetIndexArrow(6, 234); // Signal 1 panah bawah
    SetIndexArrow(7, 159); // Signal 2 titik atas
    SetIndexArrow(8, 159); // Signal 2 titik bawah
+   SetIndexArrow(9, 251); // Signal 3 silang bawah
+   SetIndexArrow(10, 251); // Signal 3 silang atas
    SetIndexEmptyValue(5, EMPTY_VALUE);
    SetIndexEmptyValue(6, EMPTY_VALUE);
    SetIndexEmptyValue(7, EMPTY_VALUE);
    SetIndexEmptyValue(8, EMPTY_VALUE);
+   SetIndexEmptyValue(9, EMPTY_VALUE);
+   SetIndexEmptyValue(10, EMPTY_VALUE);
 
    IndicatorShortName("EMA " + IntegerToString(EmaFastPeriod) + "/" + IntegerToString(EmaSlowPeriod) + " + BB " + IntegerToString(BBPeriod));
    return(INIT_SUCCEEDED);
@@ -195,6 +218,8 @@ int OnCalculate(const int rates_total,
       SellSignal1Buffer[i] = EMPTY_VALUE;
       BuySignal2Buffer[i]  = EMPTY_VALUE;
       SellSignal2Buffer[i] = EMPTY_VALUE;
+      BuySignal3Buffer[i]  = EMPTY_VALUE;
+      SellSignal3Buffer[i] = EMPTY_VALUE;
 
       if(i + 1 > rates_total - 1)
          continue;
@@ -235,6 +260,21 @@ int OnCalculate(const int rates_total,
 
       if(crossBasisDown && (basisDown || emaFastDown) && bosBearish)
          SellSignal2Buffer[i] = high[i] + gap;
+
+      // Signal 3: ekstrim SMA5(low/high) menembus BB20, murni mean-reversion (tanpa filter EMA74/BOS)
+      double sma5LowNow   = iMA(NULL, 0, Sma5Period, 0, MODE_SMA, PRICE_LOW, i);
+      double sma5LowPrev  = iMA(NULL, 0, Sma5Period, 0, MODE_SMA, PRICE_LOW, i + 1);
+      double sma5HighNow  = iMA(NULL, 0, Sma5Period, 0, MODE_SMA, PRICE_HIGH, i);
+      double sma5HighPrev = iMA(NULL, 0, Sma5Period, 0, MODE_SMA, PRICE_HIGH, i + 1);
+
+      bool crossUnderLower = sma5LowNow < BBLowerBuffer[i] && sma5LowPrev >= BBLowerBuffer[i + 1];
+      bool crossOverUpper  = sma5HighNow > BBUpperBuffer[i] && sma5HighPrev <= BBUpperBuffer[i + 1];
+
+      if(crossUnderLower)
+         BuySignal3Buffer[i] = low[i] - gap;
+
+      if(crossOverUpper)
+         SellSignal3Buffer[i] = high[i] + gap;
    }
 
    if(EnableAlerts || EnablePushNotification)
@@ -273,6 +313,22 @@ void CheckAlerts(const datetime &time[])
    {
       lastSell2AlertTime = time[1];
       string msg = Symbol() + " " + EnumToString((ENUM_TIMEFRAMES)Period()) + ": SELL Signal 2 (cross BB basis, slope searah)";
+      if(EnableAlerts) Alert(msg);
+      if(EnablePushNotification) SendNotification(msg);
+   }
+
+   if(BuySignal3Buffer[1] != EMPTY_VALUE && time[1] != lastBuy3AlertTime)
+   {
+      lastBuy3AlertTime = time[1];
+      string msg = Symbol() + " " + EnumToString((ENUM_TIMEFRAMES)Period()) + ": BUY Signal 3 (ekstrim SMA5 low tembus BB lower)";
+      if(EnableAlerts) Alert(msg);
+      if(EnablePushNotification) SendNotification(msg);
+   }
+
+   if(SellSignal3Buffer[1] != EMPTY_VALUE && time[1] != lastSell3AlertTime)
+   {
+      lastSell3AlertTime = time[1];
+      string msg = Symbol() + " " + EnumToString((ENUM_TIMEFRAMES)Period()) + ": SELL Signal 3 (ekstrim SMA5 high tembus BB upper)";
       if(EnableAlerts) Alert(msg);
       if(EnablePushNotification) SendNotification(msg);
    }
