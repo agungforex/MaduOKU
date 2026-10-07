@@ -52,8 +52,8 @@ bbDevVal = bbDev * ta.stdev(close, bbPeriod)
 bbUpper = bbBasis + bbDevVal
 bbLower = bbBasis - bbDevVal
 
-plot(showEMA ? ema1 : na, "EMA " + str.tostring(ema1Period), color = color.new(color.blue, 0),   linewidth = 2)
-plot(showEMA ? ema2 : na, "EMA " + str.tostring(ema2Period), color = color.new(color.orange, 0), linewidth = 2)
+plot(showEMA ? ema1 : na, "EMA 1", color = color.new(color.blue, 0),   linewidth = 2)
+plot(showEMA ? ema2 : na, "EMA 2", color = color.new(color.orange, 0), linewidth = 2)
 plot(showBB ? bbUpper : na, "BB Upper", color = color.new(color.silver, 0))
 plot(showBB ? bbBasis : na, "BB Mid",   color = color.new(color.gray, 0), style = plot.style_circles)
 plot(showBB ? bbLower : na, "BB Lower", color = color.new(color.silver, 0))
