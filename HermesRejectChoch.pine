@@ -1,6 +1,6 @@
 // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 // Converted from HermesRejectChoch.mq4
-//@version=5
+//@version=6
 indicator("HermesRejectChoch", overlay = true, max_labels_count = 500, max_lines_count = 50)
 
 // ================= Rejection =================
