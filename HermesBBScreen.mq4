@@ -21,7 +21,8 @@ input int    FontSize   = 9;
 input int    PairsPerLine = 6;
 input color  ColUp      = clrTomato;      // BB atas
 input color  ColLo      = clrLimeGreen;   // BB bawah
-input color  ColEma     = clrGold;        // EMA di dalam BB
+input color  ColSell    = clrOrange;      // EMA di atas BB (SELL)
+input color  ColBuy     = clrAqua;        // EMA di bawah BB (BUY)
 input color  ColHead    = clrSilver;
 string PFX = "HBBS_";
 string FNAME = "hermes_bbscreen.txt";
@@ -104,8 +105,8 @@ void OnTimer()
    int cnt[6] = {0,0,0,0,0,0};   // idx = tfIndex*2 + (0 atas,1 bawah)
    string lstP[6][40];           // candle sebelumnya (sudah close, shift 1)
    int cntP[6] = {0,0,0,0,0,0};
-   string lstE[3][40];           // EMA74 di dalam BB, per TF (0=H4,1=D1,2=W1)
-   int cntE[3] = {0,0,0};
+   string lstE[6][40];            // EMA74 di luar BB, idx = tfIndex*2 + (0 SELL/atas,1 BUY/bawah)
+   int cntE[6] = {0,0,0,0,0,0};
    int n = SymbolsTotal(true);
    for(int i = 0; i < n; i++)
    {
@@ -126,12 +127,9 @@ void OnTimer()
          if(up <= 0 || lo <= 0 || hi0 <= 0 || bt == 0) continue;
          if(hi0 >= up && cnt[k*2] < 40)     { lst[k*2][cnt[k*2]] = s;     cnt[k*2]++; }
          if(lo0 <= lo && cnt[k*2+1] < 40)   { lst[k*2+1][cnt[k*2+1]] = s; cnt[k*2+1]++; }
-         // screening EMA74 berada di dalam BB (antara lower dan upper)
-         if(ema > 0 && ema >= lo && ema <= up && cntE[k] < 40)
-         {
-            lstE[k][cntE[k]] = s;
-            cntE[k]++;
-         }
+         // screening EMA74 berada di LUAR BB: di atas BB atas = SELL, di bawah BB bawah = BUY
+         if(ema > 0 && ema > up && cntE[k*2] < 40)       { lstE[k*2][cntE[k*2]] = s;     cntE[k*2]++; }
+         if(ema > 0 && ema < lo && cntE[k*2+1] < 40)     { lstE[k*2+1][cntE[k*2+1]] = s; cntE[k*2+1]++; }
          // candle sebelumnya yang sudah close (shift 1) dengan BB di bar itu
          double upP = iBands(s, tf, BBPeriod, BBDev, 0, PRICE_CLOSE, MODE_UPPER, 1);
          double loP = iBands(s, tf, BBPeriod, BBDev, 0, PRICE_CLOSE, MODE_LOWER, 1);
@@ -176,15 +174,17 @@ void OnTimer()
       DrawRow("W1 BB ATAS ", a4, cnt[4], ColUp);
       DrawRow("W1 BB BAWAH", a5, cnt[5], ColLo);
 
-      // bagian EMA74 di dalam BB, per TF
+      // bagian EMA74 di luar BB: atas = SELL, bawah = BUY
       Lbl("", ColHead);
-      Lbl("EMA" + IntegerToString(EMAPeriod) + " DI DALAM BB", ColHead);
-      string etitle[3] = {"H4 EMA IN BB", "D1 EMA IN BB", "W1 EMA IN BB"};
-      for(int qe = 0; qe < 3; qe++)
+      Lbl("EMA" + IntegerToString(EMAPeriod) + " DI LUAR BB (atas=SELL, bawah=BUY)", ColHead);
+      string etitle[6] = {"H4 EMA ATAS SELL", "H4 EMA BAWAH BUY ",
+                           "D1 EMA ATAS SELL", "D1 EMA BAWAH BUY ",
+                           "W1 EMA ATAS SELL", "W1 EMA BAWAH BUY "};
+      for(int qe = 0; qe < 6; qe++)
       {
          string el[]; ArrayResize(el, 40);
          for(int j3 = 0; j3 < 40; j3++) el[j3] = lstE[qe][j3];
-         DrawRow(etitle[qe], el, cntE[qe], ColEma);
+         DrawRow(etitle[qe], el, cntE[qe], (qe % 2 == 0) ? ColSell : ColBuy);
       }
 
       // bagian bawah: candle sebelumnya yang sudah close (H4, D1, W1)
