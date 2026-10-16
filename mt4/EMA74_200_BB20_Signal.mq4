@@ -6,13 +6,13 @@
 #property indicator_plots   13
 
 #property indicator_type1   DRAW_LINE
-#property indicator_color1  clrOrange
+#property indicator_color1  clrBlue
 #property indicator_width1  2
 #property indicator_label1  "EMA Fast"
 
 #property indicator_type2   DRAW_LINE
-#property indicator_color2  clrDodgerBlue
-#property indicator_width2  2
+#property indicator_color2  clrOrange
+#property indicator_width2  1
 #property indicator_label2  "EMA Slow"
 
 #property indicator_type3   DRAW_LINE
@@ -30,51 +30,51 @@
 
 #property indicator_type6   DRAW_ARROW
 #property indicator_color6  clrBlue
-#property indicator_width6  2
+#property indicator_width6  1
 #property indicator_label6  "Buy Signal 1"
 
 #property indicator_type7   DRAW_ARROW
 #property indicator_color7  clrRed
-#property indicator_width7  2
+#property indicator_width7  1
 #property indicator_label7  "Sell Signal 1"
 
 #property indicator_type8   DRAW_ARROW
 #property indicator_color8  clrBlue
-#property indicator_width8  1
+#property indicator_width8  2
 #property indicator_label8  "Buy Signal 2"
 
 #property indicator_type9   DRAW_ARROW
 #property indicator_color9  clrRed
-#property indicator_width9  1
+#property indicator_width9  2
 #property indicator_label9  "Sell Signal 2"
 
 #property indicator_type10  DRAW_ARROW
 #property indicator_color10 clrBlue
-#property indicator_width10 1
+#property indicator_width10 2
 #property indicator_label10 "Buy Signal 3"
 
 #property indicator_type11  DRAW_ARROW
 #property indicator_color11 clrRed
-#property indicator_width11 1
+#property indicator_width11 2
 #property indicator_label11 "Sell Signal 3"
 
 #property indicator_type12  DRAW_LINE
-#property indicator_color12 clrBlue
+#property indicator_color12 clrViolet
 #property indicator_label12 "SMA 5 Low"
 
 #property indicator_type13  DRAW_LINE
-#property indicator_color13 clrRed
+#property indicator_color13 clrViolet
 #property indicator_label13 "SMA 5 High"
 
 input int    EmaFastPeriod = 74;
 input int    EmaSlowPeriod = 200;
 input int    BBPeriod      = 20;
 input double BBDeviation   = 2.0;
-input bool   RequireBOS    = true;  // Signal valid hanya jika searah BOS terakhir
+input bool   RequireBOS    = false;  // Signal valid hanya jika searah BOS terakhir
 input int    BosLookback   = 50;    // BOS harus terjadi dalam N candle terakhir
 input int    Sma5Period    = 5;     // Periode SMA untuk Signal 3 (ekstrim)
 input int    ArrowGapPoints = 10;
-input bool   EnableAlerts  = true;
+input bool   EnableAlerts  = false;
 input bool   EnablePushNotification = false;
 
 double EmaFastBuffer[];
