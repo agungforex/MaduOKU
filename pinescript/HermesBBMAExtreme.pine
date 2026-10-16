@@ -1,0 +1,51 @@
+//@version=6
+indicator("Hermes BBMA Extreme", overlay = true, max_labels_count = 500)
+
+// Port 1:1 dari HermesBBMAExtreme.mq4 (MT4).
+// BUY  X : SMA5(Low)  cross keluar BB20 lower  DAN EMA74 > EMA200
+// SELL X : SMA5(High) cross keluar BB20 upper  DAN EMA74 < EMA200
+// Cross = sekali per event (bar ini di luar BB, bar sebelumnya belum).
+
+gIn = "Input"
+bbLen    = input.int(20, "BB periode", minval = 2, group = gIn)
+bbMult   = input.float(2.0, "BB deviasi", step = 0.1, group = gIn)
+sma5Len  = input.int(5, "SMA 5 (High & Low)", minval = 1, group = gIn)
+emaFastP = input.int(74, "EMA cepat", minval = 1, group = gIn)
+emaSlowP = input.int(200, "EMA lambat", minval = 1, group = gIn)
+
+gVis = "Tampilan"
+showBB   = input.bool(true, "Tampilkan BB20", group = gVis)
+showSma5 = input.bool(true, "Tampilkan SMA5 High/Low", group = gVis)
+showEma  = input.bool(true, "Tampilkan EMA74/200", group = gVis)
+colBuy   = input.color(color.lime, "Warna X BUY", group = gVis)
+colSell  = input.color(color.red, "Warna X SELL", group = gVis)
+
+// ---- hitung indikator dasar ----
+basis = ta.sma(close, bbLen)
+dev   = bbMult * ta.stdev(close, bbLen)
+bbUp  = basis + dev
+bbLo  = basis - dev
+sma5H = ta.sma(high, sma5Len)
+sma5L = ta.sma(low, sma5Len)
+e74   = ta.ema(close, emaFastP)
+e200  = ta.ema(close, emaSlowP)
+
+// ---- sinyal: SMA5 cross keluar BB (baru) + filter tren EMA74/EMA200 ----
+buyX  = sma5L < bbLo and sma5L[1] >= bbLo[1] and e74 > e200
+sellX = sma5H > bbUp and sma5H[1] <= bbUp[1] and e74 < e200
+
+// ---- plot indikator dasar (force_overlay memastikan selalu nempel di chart utama, skala harga sama) ----
+plot(showEma ? e74 : na, "EMA74", color = color.blue, linewidth = 2, force_overlay = true)
+plot(showEma ? e200 : na, "EMA200", color = color.orange, force_overlay = true)
+plot(showBB ? bbUp : na, "BB Upper", color = color.silver, force_overlay = true)
+plot(showBB ? bbLo : na, "BB Lower", color = color.silver, force_overlay = true)
+plot(showBB ? basis : na, "BB Basis", color = color.gray, style = plot.style_circles, force_overlay = true)
+plot(showSma5 ? sma5H : na, "SMA5 High", color = color.fuchsia, force_overlay = true)
+plot(showSma5 ? sma5L : na, "SMA5 Low", color = color.fuchsia, force_overlay = true)
+
+// ---- tanda X (sekali per event) ----
+plotshape(buyX, title = "Extreme BUY", style = shape.xcross, location = location.belowbar, color = colBuy, size = size.tiny, force_overlay = true)
+plotshape(sellX, title = "Extreme SELL", style = shape.xcross, location = location.abovebar, color = colSell, size = size.tiny, force_overlay = true)
+
+alertcondition(buyX, "BBMA Extreme BUY", "Hermes BBMA Extreme BUY")
+alertcondition(sellX, "BBMA Extreme SELL", "Hermes BBMA Extreme SELL")
